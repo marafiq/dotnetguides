@@ -1,0 +1,51 @@
+{
+  "name": "@impulse/react",
+  "version": "0.1.0",
+  "description": "React runtime for Impulse framework",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsgo --project tsconfig.build.json",
+    "build:tsc": "tsc --project tsconfig.build.json",
+    "dev": "tsgo --watch --project tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsgo --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@tanstack/react-router": "^1.95.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@typescript/native-preview": "^7.0.0-dev",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0",
+    "jsdom": "^25.0.0"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "keywords": [
+    "impulse",
+    "react",
+    "server-driven",
+    "tanstack-router"
+  ],
+  "license": "MIT"
+}

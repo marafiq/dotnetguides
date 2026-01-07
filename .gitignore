@@ -1,35 +1,87 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
-/.pnp
+# ===================
+# .NET
+# ===================
+bin/
+obj/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+.vs/
+*.nupkg
+project.lock.json
+TestResults/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# ===================
+# Node.js / npm
+# ===================
+node_modules/
+.pnp
 .pnp.js
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env*.local
+# ===================
+# Build outputs
+# ===================
+/build
+dist/
+/out/
+*.tsbuildinfo
 
-# vercel
+# ===================
+# Testing
+# ===================
+coverage/
+TestResults/
+
+# ===================
+# Next.js
+# ===================
+.next/
+next-env.d.ts
+
+# ===================
+# Environment
+# ===================
+.env
+.env*.local
+*.pem
+
+# ===================
+# IDE / Editor
+# ===================
+.DS_Store
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# ===================
+# Vercel
+# ===================
 .vercel
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ===================
+# Generated files
+# ===================
+*.g.ts
+*.g.js
+Generated/
