@@ -2,12 +2,10 @@
   <Folder Name="/src/">
     <Project Path="src/Impulse.CodeGen/Impulse.CodeGen.csproj" />
     <Project Path="src/Impulse.Core/Impulse.Core.csproj" />
-    <Project Path="src/Impulse.Sample.Server/Impulse.Sample.Server.csproj" />
-    <Project Path="src/Impulse.Validation/Impulse.Validation.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Impulse.CodeGen.Tests/Impulse.CodeGen.Tests.csproj" />
     <Project Path="tests/Impulse.Core.Tests/Impulse.Core.Tests.csproj" />
-    <Project Path="tests/Impulse.Validation.Tests/Impulse.Validation.Tests.csproj" />
+    <Project Path="tests/Impulse.IntegrationTests/Impulse.IntegrationTests.csproj" />
   </Folder>
 </Solution>

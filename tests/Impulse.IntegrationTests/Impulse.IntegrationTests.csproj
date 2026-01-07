@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>14.0</LangVersion>
+    <RootNamespace>Impulse.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Local project references -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Impulse.Core\Impulse.Core.csproj" />
+    <ProjectReference Include="..\..\src\Impulse.CodeGen\Impulse.CodeGen.csproj" />
+  </ItemGroup>
+
+  <!-- TSX Build Integration -->
+  <Target Name="BuildTypeScript" BeforeTargets="Build" Condition="Exists('package.json')">
+    <Exec Command="npm install --silent" />
+    <Exec Command="npx tsgo --project tsconfig.json" ContinueOnError="true" />
+    <Exec Command="npx tsc --project tsconfig.json" Condition="'$(ExitCode)' != '0'" />
+  </Target>
+
+  <Target Name="TypeCheck" BeforeTargets="Build" Condition="Exists('package.json')">
+    <Exec Command="npx tsc --noEmit" />
+  </Target>
+
+  <!-- wwwroot is automatically included by Microsoft.NET.Sdk.Web -->
+
+</Project>

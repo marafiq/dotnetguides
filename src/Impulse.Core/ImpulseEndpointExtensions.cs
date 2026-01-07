@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Impulse.Core;
 
@@ -11,15 +12,21 @@ public static class ImpulseEndpointExtensions
 {
     /// <summary>
     /// Registers an endpoint as an Impulse component.
+    /// Component path is derived from the Props type using convention.
     /// </summary>
-    /// <typeparam name="TProps">The props type for the component.</typeparam>
+    /// <typeparam name="TProps">The props type for the component. Must be in a Features namespace.</typeparam>
     /// <param name="builder">The route handler builder.</param>
-    /// <param name="componentPath">The path to the React component (e.g., "./Residents/ResidentDetail").</param>
     /// <returns>A component builder for further configuration.</returns>
+    /// <remarks>
+    /// Path derivation examples:
+    /// - Features.Dashboard.DashboardProps → ./Dashboard
+    /// - Features.Residents.ResidentDetailProps → ./Residents/Detail
+    /// </remarks>
     public static ImpulseComponentBuilder<TProps> AsComponent<TProps>(
-        this RouteHandlerBuilder builder,
-        string componentPath)
+        this RouteHandlerBuilder builder)
     {
+        var componentPath = ComponentPathConvention.GetPath<TProps>();
+
         var metadata = new ImpulseComponentMetadata
         {
             PropsType = typeof(TProps),
