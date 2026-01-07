@@ -10,6 +10,13 @@ public static class Handler
         new(4, "Room Assignment", "Where the resident will stay", false, false)
     ];
 
+    // Alias for Program.cs compatibility
+    public static WizardProps GetStep(int step) => Get(step);
+
+    public static WizardStepResponse NextStep(WizardStepRequest request) => ValidateAndNext(request);
+
+    public static WizardStepResponse PreviousStep(int currentStep) => GoBack(currentStep);
+
     public static WizardProps Get(int step = 1, WizardFormData? formData = null)
     {
         formData ??= new WizardFormData(

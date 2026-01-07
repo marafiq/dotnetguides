@@ -70,3 +70,7 @@ public record WizardSubmitResponse(
     int? ResidentId,
     string? Message
 );
+
+public record WizardBackRequest(
+    int CurrentStep
+);

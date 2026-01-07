@@ -149,23 +149,32 @@ public sealed class ImpulseMutationBuilder<TRequest, TResponse>
 
 /// <summary>
 /// Endpoint filter that handles Impulse navigation requests.
+/// For browser requests: renders full HTML shell with embedded props.
+/// For X-Impulse requests: returns JSON navigation response.
 /// </summary>
 internal sealed class ImpulseComponentFilter : IEndpointFilter
 {
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var result = await next(context);
+        if (result is null) return result;
 
-        // Check if this is an Impulse navigation request
         var httpContext = context.HttpContext;
         var isImpulseRequest = httpContext.Request.Headers.ContainsKey(ImpulseHeaders.Impulse);
 
-        if (isImpulseRequest && result is not null)
-        {
-            var clientVersion = httpContext.Request.Headers[ImpulseHeaders.Version].FirstOrDefault();
-            var serverVersion = httpContext.RequestServices.GetService<ImpulseConfiguration>()?.Version;
+        // Get services
+        var config = httpContext.RequestServices.GetService<ImpulseConfiguration>();
+        var contextProvider = httpContext.RequestServices.GetService<IImpulseContextProvider>();
+        var appContext = contextProvider is not null
+            ? await contextProvider.GetContextAsync(httpContext)
+            : new object();
 
-            // Check for version mismatch
+        if (isImpulseRequest)
+        {
+            // X-Impulse request: return JSON navigation response
+            var clientVersion = httpContext.Request.Headers[ImpulseHeaders.Version].FirstOrDefault();
+            var serverVersion = config?.Version;
+
             if (!string.IsNullOrEmpty(clientVersion) &&
                 !string.IsNullOrEmpty(serverVersion) &&
                 clientVersion != serverVersion)
@@ -173,17 +182,44 @@ internal sealed class ImpulseComponentFilter : IEndpointFilter
                 httpContext.Response.Headers[ImpulseHeaders.Reload] = "true";
             }
 
-            // Return navigation response format
-            var contextProvider = httpContext.RequestServices.GetService<IImpulseContextProvider>();
-            var appContext = contextProvider is not null
-                ? await contextProvider.GetContextAsync(httpContext)
-                : new object();
-
             return Results.Ok(new ImpulseNavigationResponse
             {
                 Props = result,
                 Context = appContext
             });
+        }
+        else
+        {
+            // Browser request: render HTML shell
+            var renderer = httpContext.RequestServices.GetService<ImpulseShellRenderer>();
+            var metadata = httpContext.GetEndpoint()?.Metadata.GetMetadata<ImpulseComponentMetadata>();
+
+            if (renderer is not null && config is not null)
+            {
+                var payload = new ImpulsePayload
+                {
+                    Url = httpContext.Request.Path.Value ?? "/",
+                    Version = config.Version,
+                    Props = result,
+                    Context = appContext,
+                    Deferred = metadata?.Deferred.Count > 0
+                        ? metadata.Deferred.ToDictionary(
+                            d => d.Key,
+                            d => d.Value.UrlTemplate)
+                        : null,
+                    Lazy = metadata?.Lazy.Count > 0
+                        ? metadata.Lazy.ToDictionary(
+                            l => l.Key,
+                            l => l.Value.UrlTemplate)
+                        : null
+                };
+
+                var componentPath = metadata?.ComponentPath ?? "./App";
+                var html = renderer.RenderShell(payload, "Impulse App");
+                html = html.Replace("data-impulse='", $"data-component=\"{componentPath}\" data-impulse='");
+
+                return Results.Content(html, "text/html");
+            }
         }
 
         return result;
