@@ -17,7 +17,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddImpulse(config =>
 {
     config.Version = "1.0.0";
-    config.BundlePath = "/js/Shared/index.js";
+    config.EntryPoint = "Features/Shared/index.ts";  // Must match manifest key
+    config.BundlePath = "/js/impulse.js";  // Fallback if manifest not found
 });
 
 var app = builder.Build();

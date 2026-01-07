@@ -50,7 +50,7 @@ export default defineConfig({
     timeout: 120000,
     env: {
       ASPNETCORE_URLS: 'http://localhost:5000',
-      DOTNET_ENVIRONMENT: 'Development',
+      DOTNET_ENVIRONMENT: 'Production',  // Use production to load manifest
       PATH: `${process.env.HOME}/.dotnet:${process.env.PATH}`,
     },
   },
