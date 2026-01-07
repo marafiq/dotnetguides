@@ -1,16 +1,14 @@
-namespace Impulse.Core.Tests;
+namespace Impulse.Validation.Tests;
 
 public static class Program
 {
     public static int Main()
     {
         Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        Console.WriteLine("Impulse.Core Tests");
+        Console.WriteLine("Impulse.Validation Tests");
         Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-        ComponentPathConventionTests.RunAll();
-        ImpulseShellRendererTests.RunAll();
-        ImpulseEndpointTests.RunAll();
+        ZodSchemaGeneratorTests.RunAll();
 
         return TestRunner.Report();
     }

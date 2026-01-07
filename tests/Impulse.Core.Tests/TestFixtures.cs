@@ -4,12 +4,15 @@
 namespace TestTypes.Features.Dashboard
 {
     public record DashboardProps(int TotalCount);
+    public record DashboardStatsProps(int ActiveCount, int InactiveCount);
+    public record NotificationsProps(IReadOnlyList<string> Messages);
 }
 
 namespace TestTypes.Features.Residents
 {
     public record ResidentDetailProps(int Id, string Name);
     public record ResidentsListProps(IReadOnlyList<ResidentDetailProps> Items);
+    public record ResidentHistoryProps(int ResidentId, IReadOnlyList<string> Events);
 }
 
 namespace TestTypes.Features.Users
@@ -30,4 +33,13 @@ namespace TestTypes.Features.Help
 namespace TestTypes.NotInFeatures
 {
     public record SomeProps(string Data);
+}
+
+// Mutation request/response types for testing
+namespace TestTypes
+{
+    public record CreateResidentRequest(string Name, string Email);
+    public record CreateResidentResponse(int Id, string Name);
+    public record UpdateResidentRequest(int Id, string Name, string Email);
+    public record UpdateResidentResponse(int Id, bool Success);
 }

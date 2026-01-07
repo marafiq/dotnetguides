@@ -31,21 +31,29 @@ public sealed class ViteManifest
         try
         {
             var json = File.ReadAllText(manifestPath);
-            var manifest = JsonSerializer.Deserialize<Dictionary<string, ManifestEntry>>(json);
-
-            if (manifest is not null)
-            {
-                _entries.Clear();
-                foreach (var (key, value) in manifest)
-                {
-                    _entries[key] = value;
-                }
-                _loaded = true;
-            }
+            LoadFromJson(json);
         }
         catch
         {
             _loaded = false;
+        }
+    }
+
+    /// <summary>
+    /// Loads the manifest from a JSON string (for testing).
+    /// </summary>
+    public void LoadFromJson(string json)
+    {
+        var manifest = JsonSerializer.Deserialize<Dictionary<string, ManifestEntry>>(json);
+
+        if (manifest is not null)
+        {
+            _entries.Clear();
+            foreach (var (key, value) in manifest)
+            {
+                _entries[key] = value;
+            }
+            _loaded = true;
         }
     }
 
