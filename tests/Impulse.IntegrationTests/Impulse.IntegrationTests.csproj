@@ -6,13 +6,22 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>14.0</LangVersion>
     <RootNamespace>Impulse.IntegrationTests</RootNamespace>
+    <!-- Emit source generator output to disk for debugging -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
   </PropertyGroup>
 
   <!-- Local project references -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\Impulse.Core\Impulse.Core.csproj" />
     <ProjectReference Include="..\..\src\Impulse.CodeGen\Impulse.CodeGen.csproj" />
+    <ProjectReference Include="..\..\src\Impulse.SourceGen\Impulse.SourceGen.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <!-- Import SourceGen MSBuild targets for TypeScript extraction -->
+  <Import Project="..\..\src\Impulse.SourceGen\build\Impulse.SourceGen.targets" />
 
   <!-- TypeScript/Vite Build Integration -->
   <Target Name="NpmInstall" BeforeTargets="BuildTypeScript" Condition="Exists('package.json')">

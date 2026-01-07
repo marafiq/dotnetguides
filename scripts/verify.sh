@@ -128,6 +128,17 @@ else
     fail "Impulse.Validation.Tests build failed"
 fi
 
+step "Running Impulse.SourceGen.Tests..."
+if dotnet build tests/Impulse.SourceGen.Tests/Impulse.SourceGen.Tests.csproj -c Release --verbosity quiet; then
+    if dotnet run --project tests/Impulse.SourceGen.Tests/Impulse.SourceGen.Tests.csproj -c Release --no-build 2>&1; then
+        success "Impulse.SourceGen.Tests passed"
+    else
+        fail "Impulse.SourceGen.Tests failed"
+    fi
+else
+    fail "Impulse.SourceGen.Tests build failed"
+fi
+
 # ═══════════════════════════════════════════════════════
 # Step 3: Build Integration Tests
 # ═══════════════════════════════════════════════════════
@@ -181,6 +192,7 @@ echo "  Impulse.Validation - Built"
 echo "  Core.Tests         - Tested (39 tests)"
 echo "  CodeGen.Tests      - Tested (28 tests)"
 echo "  Validation.Tests   - Tested (27 tests)"
+echo "  SourceGen.Tests    - Tested (32 tests)"
 echo "  IntegrationTests   - Built"
 echo "  Playwright.Tests   - Setup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

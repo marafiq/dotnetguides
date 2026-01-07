@@ -11,7 +11,8 @@ using Microsoft.CodeAnalysis.Text;
 namespace Impulse.SourceGen;
 
 /// <summary>
-/// Source generator that produces TypeScript interfaces from C# Props records.
+/// Source generator that produces TypeScript interfaces from C# records.
+/// Scans for *Props records and includes all their dependent types.
 /// Outputs TypeScript as commented C# code for MSBuild extraction.
 /// </summary>
 [Generator]
@@ -19,16 +20,16 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Find all record declarations ending with "Props"
-        var propsRecords = context.SyntaxProvider
+        // Find all record declarations (we'll filter to those used by Props types)
+        var allRecords = context.SyntaxProvider
             .CreateSyntaxProvider(
-                predicate: static (node, _) => IsPropsRecord(node),
-                transform: static (ctx, _) => GetPropsInfo(ctx))
+                predicate: static (node, _) => node is RecordDeclarationSyntax,
+                transform: static (ctx, _) => GetTypeInfo(ctx))
             .Where(static info => info is not null)
             .Select(static (info, _) => info!);
 
-        // Collect all props and generate TypeScript
-        var collected = propsRecords.Collect();
+        // Collect all records and generate TypeScript
+        var collected = allRecords.Collect();
 
         context.RegisterSourceOutput(collected, static (ctx, records) =>
         {
@@ -39,13 +40,7 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
         });
     }
 
-    private static bool IsPropsRecord(SyntaxNode node)
-    {
-        return node is RecordDeclarationSyntax record &&
-               record.Identifier.Text.EndsWith("Props", StringComparison.Ordinal);
-    }
-
-    private static PropsInfo? GetPropsInfo(GeneratorSyntaxContext context)
+    private static TypeInfo? GetTypeInfo(GeneratorSyntaxContext context)
     {
         var record = (RecordDeclarationSyntax)context.Node;
         var symbol = context.SemanticModel.GetDeclaredSymbol(record);
@@ -53,6 +48,7 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
         if (symbol is null) return null;
 
         var properties = new List<PropertyInfo>();
+        var dependentTypes = new HashSet<string>();
 
         // Get properties from primary constructor parameters
         if (record.ParameterList is not null)
@@ -62,23 +58,69 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
                 var paramSymbol = context.SemanticModel.GetDeclaredSymbol(param);
                 if (paramSymbol is IParameterSymbol ps)
                 {
+                    var (tsType, deps) = GetTypeScriptTypeWithDeps(ps.Type);
                     properties.Add(new PropertyInfo(
                         ps.Name,
-                        GetTypeScriptType(ps.Type),
+                        tsType,
                         IsNullable(ps.Type)));
+                    foreach (var dep in deps)
+                    {
+                        dependentTypes.Add(dep);
+                    }
                 }
             }
         }
 
-        return new PropsInfo(
+        return new TypeInfo(
             symbol.Name,
             symbol.ContainingNamespace.ToDisplayString(),
-            properties);
+            properties,
+            symbol.TypeKind == TypeKind.Enum,
+            dependentTypes.ToList());
     }
 
-    private static string GenerateTypeScriptSource(ImmutableArray<PropsInfo> records)
+    private static string GenerateTypeScriptSource(ImmutableArray<TypeInfo> records)
     {
         var sb = new StringBuilder();
+
+        // Collect all types that need to be generated
+        var allTypes = new Dictionary<string, TypeInfo>();
+        var propsTypes = new List<TypeInfo>();
+
+        foreach (var record in records)
+        {
+            allTypes[record.Name] = record;
+            if (record.Name.EndsWith("Props", StringComparison.Ordinal))
+            {
+                propsTypes.Add(record);
+            }
+        }
+
+        // Find all dependent types recursively
+        var typesToGenerate = new HashSet<string>();
+        var queue = new Queue<string>();
+
+        foreach (var props in propsTypes)
+        {
+            typesToGenerate.Add(props.Name);
+            queue.Enqueue(props.Name);
+        }
+
+        while (queue.Count > 0)
+        {
+            var typeName = queue.Dequeue();
+            if (allTypes.TryGetValue(typeName, out var typeInfo))
+            {
+                foreach (var dep in typeInfo.DependentTypes)
+                {
+                    if (!typesToGenerate.Contains(dep) && allTypes.ContainsKey(dep))
+                    {
+                        typesToGenerate.Add(dep);
+                        queue.Enqueue(dep);
+                    }
+                }
+            }
+        }
 
         sb.AppendLine("// <auto-generated />");
         sb.AppendLine("// This file contains generated TypeScript as comments.");
@@ -96,19 +138,29 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
         sb.AppendLine("    // // Do not edit manually");
         sb.AppendLine("    //");
 
-        foreach (var record in records.OrderBy(r => r.Name))
+        // Generate all types in sorted order
+        foreach (var typeName in typesToGenerate.OrderBy(n => n))
         {
-            sb.AppendLine($"    // export interface {record.Name} {{");
-
-            foreach (var prop in record.Properties)
+            if (allTypes.TryGetValue(typeName, out var record))
             {
-                var optionalMarker = prop.IsNullable ? "?" : "";
-                var propName = ToCamelCase(prop.Name);
-                sb.AppendLine($"    //   {propName}{optionalMarker}: {prop.TypeScriptType};");
-            }
+                if (record.IsEnum)
+                {
+                    // Enums would need special handling - for now skip
+                    continue;
+                }
 
-            sb.AppendLine("    // }");
-            sb.AppendLine("    //");
+                sb.AppendLine($"    // export interface {record.Name} {{");
+
+                foreach (var prop in record.Properties)
+                {
+                    var optionalMarker = prop.IsNullable ? "?" : "";
+                    var propName = ToCamelCase(prop.Name);
+                    sb.AppendLine($"    //   {propName}{optionalMarker}: {prop.TypeScriptType};");
+                }
+
+                sb.AppendLine("    // }");
+                sb.AppendLine("    //");
+            }
         }
 
         sb.AppendLine("    // </impulse-typescript>");
@@ -117,16 +169,20 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
         return sb.ToString();
     }
 
-    private static string GetTypeScriptType(ITypeSymbol type)
+    private static (string Type, List<string> Dependencies) GetTypeScriptTypeWithDeps(ITypeSymbol type)
     {
+        var deps = new List<string>();
+
         // Handle nullable
-        if (type is INamedTypeSymbol named && named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        if (type is INamedTypeSymbol nullable && nullable.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
         {
-            return GetTypeScriptType(named.TypeArguments[0]) + " | null";
+            var (innerType, innerDeps) = GetTypeScriptTypeWithDeps(nullable.TypeArguments[0]);
+            deps.AddRange(innerDeps);
+            return (innerType + " | null", deps);
         }
 
         // Primitives
-        return type.SpecialType switch
+        var tsType = type.SpecialType switch
         {
             SpecialType.System_Int16 or
             SpecialType.System_Int32 or
@@ -140,24 +196,32 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
             SpecialType.System_Boolean => "boolean",
             SpecialType.System_DateTime => "string",
 
-            _ => GetComplexTypeScriptType(type)
+            _ => null
         };
-    }
 
-    private static string GetComplexTypeScriptType(ITypeSymbol type)
-    {
+        if (tsType != null) return (tsType, deps);
+
+        // Complex types
         var name = type.Name;
+
+        // Handle System.Object -> unknown
+        if (type.SpecialType == SpecialType.System_Object || name == "Object")
+        {
+            return ("unknown", deps);
+        }
 
         // Handle common types
         if (name is "Guid" or "DateOnly" or "TimeOnly" or "DateTimeOffset")
         {
-            return "string";
+            return ("string", deps);
         }
 
         // Handle arrays
         if (type is IArrayTypeSymbol arrayType)
         {
-            return $"readonly {GetTypeScriptType(arrayType.ElementType)}[]";
+            var (elemType, elemDeps) = GetTypeScriptTypeWithDeps(arrayType.ElementType);
+            deps.AddRange(elemDeps);
+            return ($"readonly {elemType}[]", deps);
         }
 
         // Handle generic collections
@@ -168,24 +232,29 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
             // List, IReadOnlyList, IEnumerable -> array
             if (genericName is "List" or "IList" or "IReadOnlyList" or "IEnumerable" or "ICollection" or "IReadOnlyCollection")
             {
-                return $"readonly {GetTypeScriptType(namedType.TypeArguments[0])}[]";
+                var (elemType, elemDeps) = GetTypeScriptTypeWithDeps(namedType.TypeArguments[0]);
+                deps.AddRange(elemDeps);
+                return ($"readonly {elemType}[]", deps);
             }
 
             // Dictionary -> Record
             if (genericName is "Dictionary" or "IDictionary" or "IReadOnlyDictionary")
             {
-                return $"Record<{GetTypeScriptType(namedType.TypeArguments[0])}, {GetTypeScriptType(namedType.TypeArguments[1])}>";
+                var (keyType, keyDeps) = GetTypeScriptTypeWithDeps(namedType.TypeArguments[0]);
+                var (valType, valDeps) = GetTypeScriptTypeWithDeps(namedType.TypeArguments[1]);
+                deps.AddRange(keyDeps);
+                deps.AddRange(valDeps);
+                return ($"Record<{keyType}, {valType}>", deps);
             }
         }
 
-        // Enum
-        if (type.TypeKind == TypeKind.Enum)
+        // Enum or complex type - add as dependency
+        if (type.TypeKind == TypeKind.Enum || type.TypeKind == TypeKind.Class || type.TypeKind == TypeKind.Struct)
         {
-            return name;
+            deps.Add(name);
         }
 
-        // Other types - use the type name
-        return name;
+        return (name, deps);
     }
 
     private static bool IsNullable(ITypeSymbol type)
@@ -206,5 +275,5 @@ public class ImpulseTypeScriptGenerator : IIncrementalGenerator
     }
 }
 
-internal record PropsInfo(string Name, string Namespace, List<PropertyInfo> Properties);
+internal record TypeInfo(string Name, string Namespace, List<PropertyInfo> Properties, bool IsEnum, List<string> DependentTypes);
 internal record PropertyInfo(string Name, string TypeScriptType, bool IsNullable);

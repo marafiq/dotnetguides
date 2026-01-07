@@ -12,17 +12,17 @@
 -->
 <Project>
   <Target Name="ExtractImpulseTypeScript"
-          AfterTargets="GenerateMSBuildEditorConfigFileCore"
-          BeforeTargets="CoreCompile"
+          AfterTargets="CoreCompile"
           Condition="'$(DesignTimeBuild)' != 'true'">
 
     <PropertyGroup>
-      <ImpulseGeneratedDir>$(IntermediateOutputPath)generated\</ImpulseGeneratedDir>
-      <ImpulseTypesOutputDir>$(ProjectDir)Features\Generated\</ImpulseTypesOutputDir>
+      <ImpulseTypesOutputDir>$(ProjectDir)Features\Shared\</ImpulseTypesOutputDir>
     </PropertyGroup>
 
+    <!-- Look for generated files in both locations -->
     <ItemGroup>
-      <ImpulseGeneratedFiles Include="$(IntermediateOutputPath)**\*.g.cs" />
+      <ImpulseGeneratedFiles Include="$(BaseIntermediateOutputPath)Generated\**\ImpulseTypes.g.cs" />
+      <ImpulseGeneratedFiles Include="$(IntermediateOutputPath)**\ImpulseTypes.g.cs" />
     </ItemGroup>
 
     <MakeDir Directories="$(ImpulseTypesOutputDir)" Condition="!Exists('$(ImpulseTypesOutputDir)')" />
@@ -49,6 +49,8 @@ var regex = new Regex(@"// <impulse-typescript file=""([^""]+)"">(.*?)// </impul
 
 foreach (var item in SourceFiles)
 {
+    if (!File.Exists(item.ItemSpec)) continue;
+
     var content = File.ReadAllText(item.ItemSpec);
     var matches = regex.Matches(content);
 
@@ -75,10 +77,14 @@ foreach (var item in SourceFiles)
         }
 
         var outputPath = Path.Combine(OutputDirectory, filename);
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+        var outputDir = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(outputDir))
+        {
+            Directory.CreateDirectory(outputDir);
+        }
         File.WriteAllLines(outputPath, tsLines);
 
-        Log.LogMessage(MessageImportance.High, $"Extracted TypeScript: {filename}");
+        Log.LogMessage(MessageImportance.High, $"Impulse: Generated {filename}");
     }
 }
 ]]>
