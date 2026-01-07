@@ -1,8 +1,4 @@
-interface DashboardProps {
-  totalResidents: number;
-  totalMedications: number;
-  pendingTasks: number;
-}
+import type { DashboardProps } from '../Shared/types.g';
 
 export function Dashboard({ totalResidents, totalMedications, pendingTasks }: DashboardProps) {
   return (
