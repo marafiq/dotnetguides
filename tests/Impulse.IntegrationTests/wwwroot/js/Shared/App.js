@@ -1,58 +1,92 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import { createRoot } from 'react-dom/client';
-// Component registry - populated by feature modules
-window.__IMPULSE_COMPONENTS__ = {};
+import { ImpulseProvider, getPayloadFromDom, getComponentPathFromDom } from './runtime';
+window.__IMPULSE_COMPONENTS__ = new Map();
+window.__IMPULSE_VERSION__ = '';
+/**
+ * Register a component for a given path
+ * Path should match the namespace-derived path from server
+ * @example
+ * registerComponent('./Residents/Detail', ResidentDetail);
+ */
 export function registerComponent(path, component) {
-    window.__IMPULSE_COMPONENTS__[path] = component;
+    window.__IMPULSE_COMPONENTS__.set(path, component);
 }
+/**
+ * Get a registered component by path
+ */
+export function getComponent(path) {
+    return window.__IMPULSE_COMPONENTS__.get(path);
+}
+function App({ payload, Component }) {
+    return (_jsx(ImpulseProvider, { value: { payload, version: payload.version }, children: _jsx(Component, { ...payload.props }) }));
+}
+// ============================================================================
+// Mount - Hydrate from server shell
+// ============================================================================
+let appRoot = null;
+/**
+ * Mount the application from server-rendered shell
+ * Reads payload from data-impulse attribute and renders component
+ */
 export function mount() {
-    const root = document.getElementById('app');
-    if (!root)
+    const rootElement = document.getElementById('app');
+    if (!rootElement) {
+        console.error('Impulse: #app element not found');
         return;
-    const payloadStr = root.dataset.impulse;
-    if (!payloadStr)
+    }
+    const payload = getPayloadFromDom();
+    if (!payload) {
+        console.error('Impulse: No payload found in data-impulse');
         return;
-    const payload = JSON.parse(payloadStr);
-    const componentPath = root.dataset.component;
-    if (!componentPath)
+    }
+    const componentPath = getComponentPathFromDom();
+    if (!componentPath) {
+        console.error('Impulse: No component path in data-component');
         return;
-    const Component = window.__IMPULSE_COMPONENTS__[componentPath];
+    }
+    const Component = getComponent(componentPath);
     if (!Component) {
-        console.error(`Component not found: ${componentPath}`);
+        console.error(`Impulse: Component not registered: ${componentPath}`);
+        console.error('Registered components:', Array.from(window.__IMPULSE_COMPONENTS__.keys()));
         return;
     }
-    const props = payload.props;
-    createRoot(root).render(_jsx(Component, { ...props }));
-    // Handle deferred loading
-    if (payload.deferred) {
-        for (const [, url] of Object.entries(payload.deferred)) {
-            loadDeferred(url);
-        }
+    // Store version for navigation
+    window.__IMPULSE_VERSION__ = payload.version;
+    // Create or reuse root
+    if (!appRoot) {
+        appRoot = createRoot(rootElement);
     }
+    appRoot.render(_jsx(App, { payload: payload, Component: Component }));
 }
-async function loadDeferred(url) {
-    const container = document.querySelector(`[data-impulse-deferred="${url}"]`);
-    if (!container)
+/**
+ * Render a new payload (for SPA navigation)
+ */
+export function renderPayload(payload, componentPath) {
+    const rootElement = document.getElementById('app');
+    if (!rootElement)
         return;
-    try {
-        const res = await fetch(url, { headers: { 'X-Impulse': 'true' } });
-        const data = await res.json();
-        const componentPath = container.dataset.component;
-        if (componentPath && window.__IMPULSE_COMPONENTS__[componentPath]) {
-            const Component = window.__IMPULSE_COMPONENTS__[componentPath];
-            const props = data.props;
-            createRoot(container).render(_jsx(Component, { ...props }));
-        }
+    const Component = getComponent(componentPath);
+    if (!Component) {
+        console.error(`Impulse: Component not registered: ${componentPath}`);
+        return;
     }
-    catch {
-        container.textContent = 'Failed to load';
+    window.__IMPULSE_VERSION__ = payload.version;
+    if (!appRoot) {
+        appRoot = createRoot(rootElement);
     }
+    appRoot.render(_jsx(App, { payload: payload, Component: Component }));
 }
+// ============================================================================
 // Auto-mount on DOM ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mount);
-}
-else {
-    mount();
+// ============================================================================
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mount);
+    }
+    else {
+        // DOM already loaded
+        mount();
+    }
 }
 //# sourceMappingURL=App.js.map

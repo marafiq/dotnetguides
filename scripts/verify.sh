@@ -134,6 +134,18 @@ if command -v npm &> /dev/null; then
         fi
     fi
     cd "$ROOT_DIR"
+
+    # ═══════════════════════════════════════════════════════
+    # Step 5: Playwright Tests Setup
+    # ═══════════════════════════════════════════════════════
+    step "Setting up Playwright tests..."
+    cd tests/Impulse.Playwright.Tests
+    if [ -f "package.json" ]; then
+        npm install --silent 2>/dev/null || true
+        success "Playwright tests dependencies installed"
+        info "Run 'npx playwright install' and 'npm test' to execute E2E tests"
+    fi
+    cd "$ROOT_DIR"
 fi
 
 # ═══════════════════════════════════════════════════════
@@ -149,6 +161,7 @@ echo "  Impulse.SourceGen  - Built"
 echo "  Core.Tests         - Tested"
 echo "  CodeGen.Tests      - Tested"
 echo "  IntegrationTests   - Built"
+echo "  Playwright.Tests   - Setup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ $FAILED -eq 0 ]; then
     echo -e "${GREEN}All checks passed!${NC}"

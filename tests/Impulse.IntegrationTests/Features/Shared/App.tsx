@@ -1,78 +1,136 @@
+import * as React from 'react';
 import { createRoot } from 'react-dom/client';
+import { ImpulseProvider, ImpulsePayload, getPayloadFromDom, getComponentPathFromDom } from './runtime';
 
-// Impulse client runtime - mount from shell payload
-interface ImpulsePayload<T = Record<string, unknown>> {
-  url: string;
-  version: string;
-  props: T;
-  context: unknown;
-  deferred?: Record<string, string>;
-}
+// ============================================================================
+// Component Registry
+// ============================================================================
 
 declare global {
   interface Window {
-    __IMPULSE_COMPONENTS__: Record<string, React.ComponentType<any>>;
+    __IMPULSE_COMPONENTS__: Map<string, React.ComponentType<unknown>>;
+    __IMPULSE_VERSION__: string;
   }
 }
 
-// Component registry - populated by feature modules
-window.__IMPULSE_COMPONENTS__ = {};
+window.__IMPULSE_COMPONENTS__ = new Map();
+window.__IMPULSE_VERSION__ = '';
 
-export function registerComponent(path: string, component: React.ComponentType<any>) {
-  window.__IMPULSE_COMPONENTS__[path] = component;
+/**
+ * Register a component for a given path
+ * Path should match the namespace-derived path from server
+ * @example
+ * registerComponent('./Residents/Detail', ResidentDetail);
+ */
+export function registerComponent<TProps>(
+  path: string,
+  component: React.ComponentType<TProps>
+): void {
+  window.__IMPULSE_COMPONENTS__.set(path, component as React.ComponentType<unknown>);
 }
 
-export function mount() {
-  const root = document.getElementById('app');
-  if (!root) return;
+/**
+ * Get a registered component by path
+ */
+export function getComponent(path: string): React.ComponentType<unknown> | undefined {
+  return window.__IMPULSE_COMPONENTS__.get(path);
+}
 
-  const payloadStr = root.dataset.impulse;
-  if (!payloadStr) return;
+// ============================================================================
+// App Wrapper - Provides context to component tree
+// ============================================================================
 
-  const payload: ImpulsePayload = JSON.parse(payloadStr);
-  const componentPath = root.dataset.component;
+interface AppProps {
+  payload: ImpulsePayload;
+  Component: React.ComponentType<unknown>;
+}
 
-  if (!componentPath) return;
+function App({ payload, Component }: AppProps): React.ReactElement {
+  return (
+    <ImpulseProvider value={{ payload, version: payload.version }}>
+      <Component {...(payload.props as object)} />
+    </ImpulseProvider>
+  );
+}
 
-  const Component = window.__IMPULSE_COMPONENTS__[componentPath];
-  if (!Component) {
-    console.error(`Component not found: ${componentPath}`);
+// ============================================================================
+// Mount - Hydrate from server shell
+// ============================================================================
+
+let appRoot: ReturnType<typeof createRoot> | null = null;
+
+/**
+ * Mount the application from server-rendered shell
+ * Reads payload from data-impulse attribute and renders component
+ */
+export function mount(): void {
+  const rootElement = document.getElementById('app');
+  if (!rootElement) {
+    console.error('Impulse: #app element not found');
     return;
   }
 
-  const props = payload.props as Record<string, unknown>;
-  createRoot(root).render(<Component {...props} />);
-
-  // Handle deferred loading
-  if (payload.deferred) {
-    for (const [, url] of Object.entries(payload.deferred)) {
-      loadDeferred(url);
-    }
+  const payload = getPayloadFromDom();
+  if (!payload) {
+    console.error('Impulse: No payload found in data-impulse');
+    return;
   }
+
+  const componentPath = getComponentPathFromDom();
+  if (!componentPath) {
+    console.error('Impulse: No component path in data-component');
+    return;
+  }
+
+  const Component = getComponent(componentPath);
+  if (!Component) {
+    console.error(`Impulse: Component not registered: ${componentPath}`);
+    console.error('Registered components:', Array.from(window.__IMPULSE_COMPONENTS__.keys()));
+    return;
+  }
+
+  // Store version for navigation
+  window.__IMPULSE_VERSION__ = payload.version;
+
+  // Create or reuse root
+  if (!appRoot) {
+    appRoot = createRoot(rootElement);
+  }
+
+  appRoot.render(<App payload={payload} Component={Component} />);
 }
 
-async function loadDeferred(url: string) {
-  const container = document.querySelector(`[data-impulse-deferred="${url}"]`) as HTMLElement | null;
-  if (!container) return;
+/**
+ * Render a new payload (for SPA navigation)
+ */
+export function renderPayload(payload: ImpulsePayload, componentPath: string): void {
+  const rootElement = document.getElementById('app');
+  if (!rootElement) return;
 
-  try {
-    const res = await fetch(url, { headers: { 'X-Impulse': 'true' } });
-    const data = await res.json();
-
-    const componentPath = container.dataset.component;
-    if (componentPath && window.__IMPULSE_COMPONENTS__[componentPath]) {
-      const Component = window.__IMPULSE_COMPONENTS__[componentPath];
-      const props = data.props as Record<string, unknown>;
-      createRoot(container).render(<Component {...props} />);
-    }
-  } catch {
-    container.textContent = 'Failed to load';
+  const Component = getComponent(componentPath);
+  if (!Component) {
+    console.error(`Impulse: Component not registered: ${componentPath}`);
+    return;
   }
+
+  window.__IMPULSE_VERSION__ = payload.version;
+
+  if (!appRoot) {
+    appRoot = createRoot(rootElement);
+  }
+
+  appRoot.render(<App payload={payload} Component={Component} />);
 }
 
+// ============================================================================
 // Auto-mount on DOM ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', mount);
-} else {
-  mount();
+// ============================================================================
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount);
+  } else {
+    // DOM already loaded
+    mount();
+  }
 }
