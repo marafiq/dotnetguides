@@ -36,9 +36,9 @@ public sealed class FluentValidationAnalyzer
                 IsOptional = false
             };
 
-            foreach (var rule in member)
+            foreach (var (propValidator, _) in member)
             {
-                var validationRule = AnalyzeRule(rule);
+                var validationRule = AnalyzeRule(propValidator);
                 if (validationRule is not null)
                 {
                     propValidation.Rules.Add(validationRule);

@@ -84,6 +84,14 @@ else
     exit 1
 fi
 
+step "Building Impulse.Validation..."
+if dotnet build src/Impulse.Validation/Impulse.Validation.csproj -c Release --verbosity quiet; then
+    success "Impulse.Validation built"
+else
+    fail "Impulse.Validation build failed"
+    exit 1
+fi
+
 # ═══════════════════════════════════════════════════════
 # Step 2: Run Unit Tests
 # ═══════════════════════════════════════════════════════
@@ -158,6 +166,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  Impulse.Core       - Built"
 echo "  Impulse.CodeGen    - Built"
 echo "  Impulse.SourceGen  - Built"
+echo "  Impulse.Validation - Built"
 echo "  Core.Tests         - Tested"
 echo "  CodeGen.Tests      - Tested"
 echo "  IntegrationTests   - Built"
