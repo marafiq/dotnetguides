@@ -85,3 +85,4 @@ next-env.d.ts
 *.g.ts
 *.g.js
 Generated/
+lib/
