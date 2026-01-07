@@ -1,0 +1,88 @@
+<!--
+  MSBuild targets for extracting TypeScript from generated C# comments.
+  The source generator outputs TypeScript as commented C# code:
+
+  // <impulse-typescript file="types.g.ts">
+  // export interface HomeProps {
+  //   title: string;
+  // }
+  // </impulse-typescript>
+
+  This target extracts the TypeScript and writes it to the actual .ts files.
+-->
+<Project>
+  <Target Name="ExtractImpulseTypeScript"
+          AfterTargets="GenerateMSBuildEditorConfigFileCore"
+          BeforeTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+
+    <PropertyGroup>
+      <ImpulseGeneratedDir>$(IntermediateOutputPath)generated\</ImpulseGeneratedDir>
+      <ImpulseTypesOutputDir>$(ProjectDir)Features\Generated\</ImpulseTypesOutputDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ImpulseGeneratedFiles Include="$(IntermediateOutputPath)**\*.g.cs" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(ImpulseTypesOutputDir)" Condition="!Exists('$(ImpulseTypesOutputDir)')" />
+
+    <ExtractImpulseTypeScriptTask
+      SourceFiles="@(ImpulseGeneratedFiles)"
+      OutputDirectory="$(ImpulseTypesOutputDir)"
+      Condition="@(ImpulseGeneratedFiles->Count()) > 0" />
+
+  </Target>
+
+  <UsingTask TaskName="ExtractImpulseTypeScriptTask" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <SourceFiles ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <OutputDirectory ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs">
+<![CDATA[
+var regex = new Regex(@"// <impulse-typescript file=""([^""]+)"">(.*?)// </impulse-typescript>",
+    RegexOptions.Singleline);
+
+foreach (var item in SourceFiles)
+{
+    var content = File.ReadAllText(item.ItemSpec);
+    var matches = regex.Matches(content);
+
+    foreach (Match match in matches)
+    {
+        var filename = match.Groups[1].Value;
+        var tsContent = match.Groups[2].Value;
+
+        // Remove leading comment markers
+        var lines = tsContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var tsLines = new System.Collections.Generic.List<string>();
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith("// "))
+            {
+                tsLines.Add(trimmed.Substring(3));
+            }
+            else if (trimmed == "//")
+            {
+                tsLines.Add("");
+            }
+        }
+
+        var outputPath = Path.Combine(OutputDirectory, filename);
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+        File.WriteAllLines(outputPath, tsLines);
+
+        Log.LogMessage(MessageImportance.High, $"Extracted TypeScript: {filename}");
+    }
+}
+]]>
+      </Code>
+    </Task>
+  </UsingTask>
+</Project>

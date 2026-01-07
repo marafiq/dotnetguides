@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Impulse Framework",
+  "classifications": ["Web", "ASP.NET", "React", "TypeScript"],
+  "identity": "Impulse.Web",
+  "name": "Impulse Web Application",
+  "shortName": "impulse",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "ImpulseApp",
+  "preferNameDirectory": true,
+  "symbols": {
+    "Framework": {
+      "type": "parameter",
+      "description": "The target framework for the project.",
+      "datatype": "choice",
+      "choices": [
+        {
+          "choice": "net10.0",
+          "description": "Target .NET 10"
+        }
+      ],
+      "defaultValue": "net10.0"
+    }
+  },
+  "sources": [
+    {
+      "modifiers": [
+        {
+          "exclude": [
+            "**/bin/**",
+            "**/obj/**",
+            "**/node_modules/**",
+            "**/*.user",
+            "**/.git/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "postActions": [
+    {
+      "actionId": "3A7C4B45-1F5D-4A30-959A-51B88E82B5D2",
+      "args": {
+        "executable": "npm",
+        "args": "install"
+      },
+      "manualInstructions": [
+        {
+          "text": "Run 'npm install' to install dependencies"
+        }
+      ],
+      "continueOnError": true,
+      "description": "Install npm packages"
+    }
+  ]
+}
