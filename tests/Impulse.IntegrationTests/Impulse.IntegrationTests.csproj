@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Impulse.Core\Impulse.Core.csproj" />
     <ProjectReference Include="..\..\src\Impulse.CodeGen\Impulse.CodeGen.csproj" />
+    <ProjectReference Include="..\..\src\Impulse.Validation\Impulse.Validation.csproj" />
     <ProjectReference Include="..\..\src\Impulse.SourceGen\Impulse.SourceGen.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
