@@ -12,6 +12,7 @@ public sealed class ImpulseCodeGenRunner
     private readonly TypeScriptGenerator _typeGenerator;
     private readonly ContextGenerator _contextGenerator;
     private readonly RoutesGenerator _routesGenerator;
+    private readonly RegistryGenerator _registryGenerator;
 
     public ImpulseCodeGenRunner(ImpulseCodeGenOptions options)
     {
@@ -19,6 +20,7 @@ public sealed class ImpulseCodeGenRunner
         _typeGenerator = new TypeScriptGenerator();
         _contextGenerator = new ContextGenerator(_typeGenerator);
         _routesGenerator = new RoutesGenerator();
+        _registryGenerator = new RegistryGenerator();
     }
 
     /// <summary>
@@ -40,6 +42,10 @@ public sealed class ImpulseCodeGenRunner
         // Generate routes.g.ts
         var routesContent = _routesGenerator.Generate(registry);
         await WriteFileAsync("routes.g.ts", routesContent);
+
+        // Generate registry.g.ts
+        var registryContent = _registryGenerator.Generate(registry);
+        await WriteFileAsync("registry.g.ts", registryContent);
 
         // Generate index.ts barrel export
         var indexContent = GenerateIndex();
@@ -75,6 +81,7 @@ public sealed class ImpulseCodeGenRunner
             export * from './types.g';
             export * from './context.g';
             export * from './routes.g';
+            export * from './registry.g';
             """;
     }
 }

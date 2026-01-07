@@ -105,6 +105,9 @@ public static class ComponentPathConvention
             {
                 return $"{basePath}/{suffix}";
             }
+            // Suffix is empty - type name matches folder name (singular form)
+            // e.g., DynamicForms folder, DynamicFormProps type → DynamicForms
+            return basePath;
         }
 
         // Default: namespace/TypeName

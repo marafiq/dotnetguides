@@ -159,6 +159,14 @@ internal sealed class ImpulseComponentFilter : IEndpointFilter
         var result = await next(context);
         if (result is null) return result;
 
+        // Extract the actual value from IResult wrappers (e.g., Results.Ok(props))
+        var props = result switch
+        {
+            IValueHttpResult valueResult => valueResult.Value,
+            _ => result
+        };
+        if (props is null) return result;
+
         var httpContext = context.HttpContext;
         var isImpulseRequest = httpContext.Request.Headers.ContainsKey(ImpulseHeaders.Impulse);
 
@@ -184,7 +192,7 @@ internal sealed class ImpulseComponentFilter : IEndpointFilter
 
             return Results.Ok(new ImpulseNavigationResponse
             {
-                Props = result,
+                Props = props,
                 Context = appContext
             });
         }
@@ -200,7 +208,7 @@ internal sealed class ImpulseComponentFilter : IEndpointFilter
                 {
                     Url = httpContext.Request.Path.Value ?? "/",
                     Version = config.Version,
-                    Props = result,
+                    Props = props,
                     Context = appContext,
                     Deferred = metadata?.Deferred.Count > 0
                         ? metadata.Deferred.ToDictionary(

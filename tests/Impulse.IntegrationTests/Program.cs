@@ -566,7 +566,7 @@ static (object, string, string) GetResidentPane(string path)
             ),
             ReturnUrl: "/residents"
         ),
-        "./Pane",
+        ComponentPathConvention.GetPath<PaneContainerProps>(),
         "Resident Details"
     );
 }
@@ -587,7 +587,7 @@ static (object, string, string) GetFilterPane()
             ApplyUrl: "/api/filter",
             ResetUrl: "/residents"
         ),
-        "./Pane/Filter",
+        ComponentPathConvention.GetPath<FilterPaneProps>(),
         "Filter Residents"
     );
 }
@@ -605,7 +605,7 @@ static (object, string, string) GetActivityFeed()
             HasMore: true,
             LoadMoreUrl: "/activity?page=2"
         ),
-        "./Pane/ActivityFeed",
+        ComponentPathConvention.GetPath<ActivityFeedPaneProps>(),
         "Activity Feed"
     );
 }
@@ -627,7 +627,7 @@ static (object, string, string) GetConfirmModal()
             ),
             ReturnUrl: "/"
         ),
-        "./Modal",
+        ComponentPathConvention.GetPath<ModalContainerProps>(),
         "Confirm"
     );
 }
@@ -648,7 +648,7 @@ static (object, string, string) GetAlertModal()
             ),
             ReturnUrl: "/"
         ),
-        "./Modal",
+        ComponentPathConvention.GetPath<ModalContainerProps>(),
         "Alert"
     );
 }
@@ -678,7 +678,7 @@ static (object, string, string) GetFormModal()
             ),
             ReturnUrl: "/residents"
         ),
-        "./Modal",
+        ComponentPathConvention.GetPath<ModalContainerProps>(),
         "Quick Add"
     );
 }
