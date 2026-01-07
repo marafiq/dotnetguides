@@ -14,15 +14,16 @@
     <ProjectReference Include="..\..\src\Impulse.CodeGen\Impulse.CodeGen.csproj" />
   </ItemGroup>
 
-  <!-- TSX Build Integration -->
-  <Target Name="BuildTypeScript" BeforeTargets="Build" Condition="Exists('package.json')">
+  <!-- TypeScript/Vite Build Integration -->
+  <Target Name="NpmInstall" BeforeTargets="BuildTypeScript" Condition="Exists('package.json')">
     <Exec Command="npm install --silent" />
-    <Exec Command="npx tsgo --project tsconfig.json" ContinueOnError="true" />
-    <Exec Command="npx tsc --project tsconfig.json" Condition="'$(ExitCode)' != '0'" />
   </Target>
 
-  <Target Name="TypeCheck" BeforeTargets="Build" Condition="Exists('package.json')">
+  <Target Name="BuildTypeScript" BeforeTargets="Build" Condition="Exists('package.json')">
+    <!-- TypeScript type checking -->
     <Exec Command="npx tsc --noEmit" />
+    <!-- Production build with Vite (hashed assets) -->
+    <Exec Command="npm run build" Condition="'$(Configuration)' == 'Release'" />
   </Target>
 
   <!-- wwwroot is automatically included by Microsoft.NET.Sdk.Web -->

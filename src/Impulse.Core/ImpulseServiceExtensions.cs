@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Impulse.Core;
 
@@ -16,10 +18,37 @@ public static class ImpulseServiceExtensions
         this IServiceCollection services,
         Action<ImpulseConfiguration>? configure = null)
     {
-        var config = new ImpulseConfiguration();
-        configure?.Invoke(config);
+        services.AddSingleton(sp =>
+        {
+            var config = new ImpulseConfiguration();
+            configure?.Invoke(config);
 
-        services.AddSingleton(config);
+            // Auto-detect development mode from environment
+            var env = sp.GetService<IWebHostEnvironment>();
+            if (env?.IsDevelopment() == true)
+            {
+                config.UseDevelopmentServer = true;
+            }
+
+            return config;
+        });
+
+        services.AddSingleton(sp =>
+        {
+            var config = sp.GetRequiredService<ImpulseConfiguration>();
+            var env = sp.GetService<IWebHostEnvironment>();
+            var manifest = new ViteManifest(config.AssetBasePath);
+
+            // Load manifest in production mode
+            if (!config.UseDevelopmentServer && env is not null)
+            {
+                var manifestPath = Path.Combine(env.WebRootPath, config.ManifestPath);
+                manifest.Load(manifestPath);
+            }
+
+            return manifest;
+        });
+
         services.AddSingleton<ImpulseShellRenderer>();
         services.AddSingleton<ImpulseTypeRegistry>();
 
@@ -43,13 +72,40 @@ public static class ImpulseServiceExtensions
     }
 
     /// <summary>
+    /// Configures the app to use Impulse middleware.
+    /// Handles version mismatch detection and reload headers.
+    /// </summary>
+    public static IApplicationBuilder UseImpulse(this IApplicationBuilder app)
+    {
+        var config = app.ApplicationServices.GetRequiredService<ImpulseConfiguration>();
+
+        app.Use(async (context, next) =>
+        {
+            // Check for version mismatch on Impulse requests
+            if (context.Request.Headers.TryGetValue(ImpulseHeaders.Impulse, out var impulseHeader)
+                && impulseHeader == "true"
+                && context.Request.Headers.TryGetValue(ImpulseHeaders.Version, out var clientVersion)
+                && !string.IsNullOrEmpty(config.Version)
+                && clientVersion != config.Version)
+            {
+                // Signal client to reload
+                context.Response.Headers.Append(ImpulseHeaders.Reload, "true");
+            }
+
+            await next();
+        });
+
+        return app;
+    }
+
+    /// <summary>
     /// Configures the app to use Impulse context.
     /// </summary>
+    [Obsolete("Use UseImpulse() instead")]
     public static IApplicationBuilder UseImpulseContext<TContext>(
         this IApplicationBuilder app,
         Func<HttpContext, Task<TContext>> contextFactory)
     {
-        // Register context provider if not already registered
         var existingProvider = app.ApplicationServices.GetService<IImpulseContextProvider>();
         if (existingProvider is null)
         {
@@ -57,6 +113,6 @@ public static class ImpulseServiceExtensions
                 "Impulse context provider not registered. Call AddImpulseContext<TContext>() in ConfigureServices.");
         }
 
-        return app;
+        return UseImpulse(app);
     }
 }

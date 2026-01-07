@@ -18,17 +18,16 @@
   <Import Project="$(NuGetPackageRoot)impulse.sourcegen\1.0.0\build\Impulse.SourceGen.targets"
           Condition="Exists('$(NuGetPackageRoot)impulse.sourcegen\1.0.0\build\Impulse.SourceGen.targets')" />
 
-  <!-- TypeScript Build Integration -->
+  <!-- TypeScript/Vite Build Integration -->
   <Target Name="NpmInstall" BeforeTargets="BuildTypeScript" Condition="!Exists('node_modules')">
     <Exec Command="npm install --silent" />
   </Target>
 
   <Target Name="BuildTypeScript" BeforeTargets="Build" DependsOnTargets="ExtractImpulseTypeScript" Condition="Exists('package.json')">
-    <Exec Command="npx tsc --project tsconfig.json" />
-  </Target>
-
-  <Target Name="TypeCheck" BeforeTargets="Build" Condition="Exists('package.json')">
-    <Exec Command="npx tsc --noEmit" ContinueOnError="false" />
+    <!-- TypeScript type checking -->
+    <Exec Command="npx tsc --noEmit" />
+    <!-- Production build with Vite (hashed assets) -->
+    <Exec Command="npm run build" Condition="'$(Configuration)' == 'Release'" />
   </Target>
 
 </Project>
