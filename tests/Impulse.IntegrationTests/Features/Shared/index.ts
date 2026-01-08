@@ -65,8 +65,8 @@ interface ImpulseContextValue {
 
 const ImpulseContext = React.createContext<ImpulseContextValue | null>(null);
 
-function ImpulseProvider({ value, children }: { value: ImpulseContextValue; children: React.ReactNode }) {
-  return React.createElement(ImpulseContext.Provider, { value }, children);
+function ImpulseProvider(props: React.PropsWithChildren<{ value: ImpulseContextValue }>) {
+  return React.createElement(ImpulseContext.Provider, { value: props.value }, props.children);
 }
 
 // ============================================================================
