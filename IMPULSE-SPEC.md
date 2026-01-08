@@ -502,41 +502,330 @@ MUTATION FLOW:
 
 ---
 
-## 10. Tooling
+## 10. Tech Stack
 
-| Tool | Purpose |
-|------|---------|
-| .NET 10 | Backend, Minimal API |
-| Bun | JS runtime, package manager |
-| Vite | Dev server, bundler, HMR |
-| tsgo | TypeScript compiler (10x faster) |
-| TanStack Router | Type-safe routing with context |
-| Zod | Runtime validation (from FluentValidation) |
+| Layer | Tool | Version | Why |
+|-------|------|---------|-----|
+| **Backend** | .NET | 10 | Minimal API, TypedResults, source generators |
+| **Frontend** | React | 19 | Latest with concurrent features |
+| **Routing** | TanStack Router | 1.x | Type-safe, context-based DI, loaders |
+| **Validation (Server)** | FluentValidation | 11.x | Declarative rules, source generator reads |
+| **Validation (Client)** | Zod | 3.x | Generated from FluentValidation |
+| **JS Runtime** | Bun | 1.x | 10x faster than Node, native TS |
+| **Bundler** | Vite | 6.x | Fast HMR, optimized production builds |
+| **TS Compiler** | tsgo | 1.x | 10x faster than tsc (Go-based) |
+| **Package Manager** | Bun | 1.x | Binary lockfile, faster installs |
 
 ---
 
-## 11. Developer Experience
+## 11. Development Flow (HMR)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              dotnet run                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: BUILD                                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Developer Code                    Roslyn + Source Generator                 │
+│  ┌────────────────────┐           ┌────────────────────────────────────┐   │
+│  │ Program.cs         │           │                                    │   │
+│  │ MapGet("/residents")│    ──►   │  Routes.g.cs      (C# constants)   │   │
+│  │   .Impulse<Props>()│           │  TypeScript.g.cs  (embedded TS)    │   │
+│  │                    │           │                                    │   │
+│  │ Validator.cs       │           └────────────────────────────────────┘   │
+│  │ RuleFor(x.Name)    │                          │                         │
+│  │   .MaxLength(100)  │                          ▼                         │
+│  └────────────────────┘           ┌────────────────────────────────────┐   │
+│                                   │      MSBuild Extract Task          │   │
+│                                   │  regex: /* IMPULSE:file.ts */      │   │
+│                                   └────────────────────────────────────┘   │
+│                                                  │                         │
+│                          ┌───────────────────────┼───────────────────┐     │
+│                          ▼                       ▼                   ▼     │
+│                   ┌───────────┐          ┌───────────┐       ┌───────────┐│
+│                   │ types.ts  │          │validation │       │routeTree  ││
+│                   │mutations.ts│         │   .ts     │       │   .ts     ││
+│                   └───────────┘          └───────────┘       └───────────┘│
+│                          └───────────────────────┬───────────────────┘     │
+│                                                  ▼                         │
+│                                      ClientApp/generated/                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: DEV SERVERS                                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────┐      ┌─────────────────────────────┐       │
+│  │      KESTREL (.NET)         │      │      VITE (Bun)             │       │
+│  │      localhost:5000         │      │      localhost:5173         │       │
+│  │                             │      │                             │       │
+│  │  • API endpoints            │      │  • React app                │       │
+│  │  • Server-driven props      │      │  • HMR WebSocket            │       │
+│  │  • Content negotiation      │      │  • Watches *.tsx            │       │
+│  │  • X-Impulse header check   │      │  • Watches generated/       │       │
+│  └─────────────────────────────┘      └─────────────────────────────┘       │
+│              │                                    │                          │
+│              └────────────────┬───────────────────┘                          │
+│                               ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                         BROWSER                                         ││
+│  │                      localhost:5173                                     ││
+│  │                                                                         ││
+│  │   React App ◄───── HMR WebSocket ────► Vite                            ││
+│  │       │                                                                 ││
+│  │       │ context.impulseFetch('/residents/1')                           ││
+│  │       │ (X-Impulse: 1 header)                                          ││
+│  │       │                                                                 ││
+│  │       └────────► Vite Proxy ────────► Kestrel ────────► JSON           ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: HOT RELOAD SCENARIOS                                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  SCENARIO A: Edit React Component (.tsx)                                     │
+│  ────────────────────────────────────────                                    │
+│  Save Detail.tsx → Vite HMR → Browser updates → ~50ms                       │
+│  State preserved ✓                                                           │
+│                                                                              │
+│  SCENARIO B: Edit C# Handler/Model                                           │
+│  ─────────────────────────────────────                                       │
+│  Save Handler.cs → dotnet watch → Roslyn recompile                          │
+│                  → Source Generator → TypeScript.g.cs                       │
+│                  → MSBuild Extract → generated/*.ts                         │
+│                  → Vite HMR → Browser updates → ~2s                         │
+│                                                                              │
+│  SCENARIO C: Edit FluentValidation Rule                                      │
+│  ──────────────────────────────────────                                      │
+│  Save Validator.cs → Roslyn → Source Gen → validation.ts                    │
+│  z.string().max(100) → z.string().max(200)                                  │
+│  Vite HMR → Client validation matches server                                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 12. Production Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           dotnet publish -c Release                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: BUILD                                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Roslyn + Source Generator → Routes.g.cs, TypeScript.g.cs                   │
+│                │                                                             │
+│                ▼                                                             │
+│  MSBuild Extract → ClientApp/generated/*.ts                                 │
+│                │                                                             │
+│                ▼                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                         bun run build                                  │ │
+│  │                    (Vite production build)                             │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                │                                                             │
+│                ▼                                                             │
+│  ClientApp/dist/                                                             │
+│  ├── assets/                                                                 │
+│  │   ├── index-a1b2c3d4.js       (content hash, tree-shaken, minified)      │
+│  │   ├── index-e5f6g7h8.css      (content hash)                             │
+│  │   └── chunk-vendor-xyz123.js  (code split)                               │
+│  └── .vite/                                                                  │
+│      └── manifest.json            (maps source → hashed files)              │
+│                │                                                             │
+│                ▼                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                    MSBuild Copy to wwwroot                             │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                │                                                             │
+│                ▼                                                             │
+│  publish/                                                                    │
+│  ├── MyApp.dll                                                               │
+│  ├── appsettings.json                                                        │
+│  └── wwwroot/                                                                │
+│      └── assets/                                                             │
+│          ├── index-a1b2c3d4.js                                               │
+│          ├── index-e5f6g7h8.css                                              │
+│          └── .vite/manifest.json                                             │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: PRODUCTION RUNTIME                                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────┐│
+│  │                         KESTREL (single process)                        ││
+│  │                                                                         ││
+│  │  Request ──► UseStaticFiles ──► UseImpulse ──► Endpoints               ││
+│  │                    │                 │                                  ││
+│  │                    ▼                 ▼                                  ││
+│  │            /assets/*.js        / or /residents/*                        ││
+│  │            (immutable cache)   (no extension)                           ││
+│  │                    │                 │                                  ││
+│  │                    ▼                 ▼                                  ││
+│  │            wwwroot/assets/     AssetManifest reads manifest.json        ││
+│  │            Cache-Control:      Returns HTML with hashed paths:          ││
+│  │            max-age=31536000    <script src="/assets/index-a1b2c3d4.js"> ││
+│  │            immutable                                                    ││
+│  └─────────────────────────────────────────────────────────────────────────┘│
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: BROWSER REQUEST                                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Browser: GET /residents/123                                                 │
+│         │                                                                    │
+│         ▼                                                                    │
+│  Kestrel: No static file → UseImpulse middleware                            │
+│         │                                                                    │
+│         ▼                                                                    │
+│  AssetManifest reads .vite/manifest.json                                    │
+│  Returns HTML:                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │ <!DOCTYPE html>                                                        │ │
+│  │ <html>                                                                 │ │
+│  │   <head>                                                               │ │
+│  │     <link rel="stylesheet" href="/assets/index-e5f6g7h8.css">         │ │
+│  │   </head>                                                              │ │
+│  │   <body>                                                               │ │
+│  │     <div id="root"></div>                                              │ │
+│  │     <script id="__IMPULSE_PROPS__">{"resident":{...}}</script>        │ │
+│  │     <script type="module" src="/assets/index-a1b2c3d4.js"></script>   │ │
+│  │   </body>                                                              │ │
+│  │ </html>                                                                │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│         │                                                                    │
+│         ▼                                                                    │
+│  Browser loads JS (cached forever due to content hash)                      │
+│  React hydrates with embedded __IMPULSE_PROPS__                             │
+│  NO additional fetch needed for initial data                                │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 13. Dev vs Prod Comparison
+
+| Aspect | Development | Production |
+|--------|-------------|------------|
+| **Servers** | 2 (Kestrel + Vite) | 1 (Kestrel only) |
+| **Assets** | Served by Vite (unbundled) | Served by Kestrel (bundled, hashed) |
+| **JS Files** | Individual modules | Single bundle + code-split chunks |
+| **CSS** | Individual files with HMR | Single hashed file |
+| **Caching** | No cache (always fresh) | Immutable (max-age=31536000) |
+| **Source Maps** | Full (for debugging) | Optional (smaller) |
+| **Startup** | ~2s (both servers) | ~200ms (Kestrel only) |
+| **TypeScript** | tsgo watch mode | tsgo production build |
+
+---
+
+## 14. MSBuild Integration
+
+```xml
+<!-- Impulse.Sdk.targets (ships with NuGet package) -->
+<Project>
+  <!-- Auto bun install -->
+  <Target Name="ImpulseRestoreNpm" BeforeTargets="Build"
+          Condition="!Exists('$(MSBuildProjectDirectory)/ClientApp/node_modules')">
+    <Exec Command="bun install" WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp" />
+  </Target>
+
+  <!-- Extract TS from TypeScript.g.cs -->
+  <Target Name="ImpulseExtractTS" AfterTargets="Build">
+    <ImpulseExtractTask
+      SourceFile="$(IntermediateOutputPath)TypeScript.g.cs"
+      OutputDir="$(MSBuildProjectDirectory)/ClientApp/generated" />
+  </Target>
+
+  <!-- Start Vite in dev -->
+  <Target Name="ImpulseStartVite" BeforeTargets="Run"
+          Condition="'$(ASPNETCORE_ENVIRONMENT)' == 'Development'">
+    <Exec Command="bun run dev" WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp"
+          ContinueOnError="true" />
+  </Target>
+
+  <!-- Build client for publish -->
+  <Target Name="ImpulseBuildClient" BeforeTargets="Publish">
+    <Exec Command="bun run build" WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp" />
+  </Target>
+
+  <!-- Copy to wwwroot -->
+  <Target Name="ImpulseCopyAssets" AfterTargets="ImpulseBuildClient">
+    <ItemGroup>
+      <ClientAssets Include="$(MSBuildProjectDirectory)/ClientApp/dist/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ClientAssets)"
+          DestinationFolder="$(PublishDir)wwwroot/%(RecursiveDir)" />
+  </Target>
+</Project>
+```
+
+---
+
+## 15. Developer Experience
 
 ```bash
 dotnet new impulse -n MyApp
 cd MyApp
 dotnet run
-# → Browser opens, working app
-# → Edit C# → hot reload
-# → Edit .tsx → HMR
+# → Browser opens at localhost:5000
+# → Working CRUD app with React + .NET
+# → Edit C# → hot reload (~2s)
+# → Edit .tsx → HMR (~50ms)
 # → Everything just works
 ```
 
-**MSBuild targets handle:**
-- `bun install` (auto if node_modules missing)
-- Source generator → TypeScript.g.cs
-- MSBuild extract → generated/*.ts
-- Vite dev server (in development)
-- Production build with hashed assets
+**What users DON'T need to do:**
+- ❌ Run `bun install` manually
+- ❌ Start Vite in separate terminal
+- ❌ Run code generators
+- ❌ Configure proxy
+- ❌ Set up hot reload
+- ❌ Configure TypeScript paths
+- ❌ Worry about hashed assets
+
+**Everything automated by MSBuild + runtime.**
 
 ---
 
-## 12. Key Decisions
+## 16. NuGet Packages
+
+```
+Impulse.Core            → ImpulseAttribute, extension methods
+Impulse.SourceGenerator → Roslyn generator (Routes.g.cs, TypeScript.g.cs)
+Impulse.MSBuild         → TS extraction task, targets
+Impulse.Runtime         → AssetManifest, middleware, dev proxy
+Impulse.Templates       → dotnet new impulse
+
+Impulse (meta-package)  → References all above
+```
+
+**Usage:**
+```xml
+<PackageReference Include="Impulse" Version="1.0.0" />
+```
+
+---
+
+## 17. Key Decisions
 
 | Decision | Rationale |
 |----------|-----------|
