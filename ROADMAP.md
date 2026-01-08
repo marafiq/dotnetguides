@@ -481,7 +481,238 @@ Impulse.Templates      → dotnet new templates
 
 ---
 
-## 8. Open Questions
+## 8. Developer Experience & Local Dev Loop
+
+### 8.1 Repo Structure (Vertical Slices + Colocated React)
+
+```
+impulse/
+├── src/
+│   ├── Impulse.Core/                 # Core abstractions
+│   ├── Impulse.SourceGenerator/      # Roslyn generator
+│   ├── Impulse.MSBuild/              # TS generation task
+│   └── Impulse.Runtime/              # Asset serving, middleware
+├── samples/
+│   └── Impulse.Sample/               # Dogfooding app
+│       ├── Features/                 # Vertical slices
+│       │   ├── Residents/
+│       │   │   ├── ResidentsHandler.cs
+│       │   │   ├── CreateResidentValidator.cs
+│       │   │   ├── Models.cs
+│       │   │   └── Components/       # Colocated React
+│       │   │       ├── List.tsx
+│       │   │       ├── Detail.tsx
+│       │   │       └── Create.tsx
+│       │   └── Medications/
+│       │       ├── MedicationsHandler.cs
+│       │       └── Components/
+│       │           └── List.tsx
+│       ├── Program.cs
+│       └── ClientApp/
+│           ├── src/
+│           │   └── main.tsx          # Entry point only
+│           └── generated/            # Auto-generated
+├── tests/
+│   └── Impulse.Tests/
+├── nuget.config                      # Local feed
+└── Directory.Build.props             # Shared settings
+```
+
+### 8.2 Local NuGet Package Dev Loop
+
+**nuget.config:**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="local" value="./artifacts/packages" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+</configuration>
+```
+
+**Directory.Build.props:**
+```xml
+<Project>
+  <PropertyGroup>
+    <Version>0.0.1-local</Version>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)artifacts/packages</PackageOutputPath>
+  </PropertyGroup>
+</Project>
+```
+
+**Dev workflow script (dev.ps1 / dev.sh):**
+```bash
+#!/bin/bash
+set -e
+
+# 1. Pack all Impulse packages
+dotnet pack src/Impulse.Core -o artifacts/packages
+dotnet pack src/Impulse.SourceGenerator -o artifacts/packages
+dotnet pack src/Impulse.MSBuild -o artifacts/packages
+dotnet pack src/Impulse.Runtime -o artifacts/packages
+
+# 2. Clear NuGet cache for local packages
+dotnet nuget locals all --clear
+
+# 3. Restore and build sample
+dotnet restore samples/Impulse.Sample
+dotnet build samples/Impulse.Sample
+
+# 4. Run sample with hot reload
+dotnet watch run --project samples/Impulse.Sample
+```
+
+### 8.3 Fast Iteration Targets
+
+**In Impulse.Sample.csproj:**
+```xml
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <!-- Reference local projects during dev, packages in release -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <ProjectReference Include="..\..\src\Impulse.Core\Impulse.Core.csproj" />
+    <ProjectReference Include="..\..\src\Impulse.Runtime\Impulse.Runtime.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <PackageReference Include="Impulse" Version="*" />
+  </ItemGroup>
+
+  <!-- Source generator always via project reference for debugging -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Impulse.SourceGenerator\Impulse.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>
+```
+
+### 8.4 Vertical Slice File Discovery
+
+**ComponentPath convention:**
+```csharp
+// In handler registration
+app.MapGet("/residents", ResidentsHandler.List)
+   .Impulse<ResidentListProps>();  // No path needed!
+
+// Generator discovers component by convention:
+// 1. Handler is in Features/Residents/ResidentsHandler.cs
+// 2. Component is Features/Residents/Components/List.tsx
+// 3. Route name "ResidentsList" derived from handler method
+
+// Or explicit override:
+app.MapGet("/residents/{id:int}", ResidentsHandler.Detail)
+   .Impulse<ResidentDetailProps>("./Detail");  // Relative to slice
+```
+
+**Generated route uses slice-relative paths:**
+```typescript
+// routes/residents/$id.tsx
+export const Route = createFileRoute('/residents/$id')({
+  component: () => import('@/Features/Residents/Components/Detail'),
+})
+```
+
+### 8.5 Watch Mode for Full Stack
+
+**Makefile / justfile:**
+```makefile
+.PHONY: dev pack restore
+
+# Full dev loop
+dev: pack restore
+	@echo "Starting dev servers..."
+	@trap 'kill 0' EXIT; \
+	dotnet watch run --project samples/Impulse.Sample & \
+	cd samples/Impulse.Sample/ClientApp && npm run dev & \
+	wait
+
+# Pack local packages
+pack:
+	@rm -rf artifacts/packages/*.nupkg
+	@dotnet pack src/Impulse.Core -o artifacts/packages -c Debug
+	@dotnet pack src/Impulse.SourceGenerator -o artifacts/packages -c Debug
+	@dotnet pack src/Impulse.MSBuild -o artifacts/packages -c Debug
+	@dotnet pack src/Impulse.Runtime -o artifacts/packages -c Debug
+
+# Force restore from local
+restore:
+	@dotnet nuget locals all --clear
+	@dotnet restore samples/Impulse.Sample --force
+```
+
+### 8.6 Source Generator Debugging
+
+**launchSettings.json for generator debugging:**
+```json
+{
+  "profiles": {
+    "Debug Generator": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "../samples/Impulse.Sample/Impulse.Sample.csproj"
+    }
+  }
+}
+```
+
+**Or attach debugger manually:**
+```csharp
+// In ImpulseGenerator.cs
+public void Initialize(IncrementalGeneratorInitializationContext context)
+{
+#if DEBUG
+    if (!System.Diagnostics.Debugger.IsAttached)
+        System.Diagnostics.Debugger.Launch();
+#endif
+    // ...
+}
+```
+
+### 8.7 Colocated Component Imports
+
+**vite.config.ts alias:**
+```typescript
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, '../'),  // Points to project root
+      '@features': path.resolve(__dirname, '../Features'),
+    },
+  },
+})
+```
+
+**tsconfig.json paths:**
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../*"],
+      "@features/*": ["../Features/*"]
+    }
+  }
+}
+```
+
+**Usage in components:**
+```tsx
+// Features/Residents/Components/Detail.tsx
+import type { ResidentDetailProps } from '@/ClientApp/generated/types'
+import { useUpdateResident } from '@/ClientApp/generated/forms'
+
+// Or with shorter alias:
+import type { ResidentDetailProps } from '@generated/types'
+```
+
+---
+
+## 9. Open Questions
 
 - [ ] Virtual file routes vs physical files for TanStack?
 - [ ] Embed assets in DLL vs serve from wwwroot?
