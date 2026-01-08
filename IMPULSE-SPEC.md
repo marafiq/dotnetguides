@@ -32,10 +32,16 @@ Navigation:     GET /residents/123 + X-Impulse:1 → JSON only
 import {
   createRouter, createRoute, createRootRouteWithContext, lazyRouteComponent,
 } from '@tanstack/react-router'
+import type { ResidentListProps, ResidentDetailProps } from './types'
 
 export interface ImpulseContext {
   impulseFetch: <T>(url: string) => Promise<T>
   invalidate: () => Promise<void>
+}
+
+// Router type registration for full type safety
+declare module '@tanstack/react-router' {
+  interface Register { router: ReturnType<typeof createImpulseRouter> }
 }
 
 export const RoutePaths = {
@@ -56,7 +62,7 @@ const rootRoute = createRootRouteWithContext<ImpulseContext>()({
 const residentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePaths.residents,
-  loader: ({ context }) => context.impulseFetch(RoutePaths.residents),
+  loader: ({ context }) => context.impulseFetch<ResidentListProps>(RoutePaths.residents),
   component: lazyRouteComponent(() => import('../src/features/Residents/List')),
 })
 
@@ -64,7 +70,7 @@ const residentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePaths.residentDetail,
   loader: ({ context, params }) =>
-    context.impulseFetch(Routes.residentDetail(params.id)),
+    context.impulseFetch<ResidentDetailProps>(Routes.residentDetail(params.id)),
   component: lazyRouteComponent(() => import('../src/features/Residents/Detail')),
 })
 
@@ -86,7 +92,7 @@ export function createImpulseRouter(userContext?: Partial<ImpulseContext>) {
 
 ```typescript
 import { useRouter } from '@tanstack/react-router'
-import { useImpulseMutation } from '@impulse/react'
+import { useImpulseMutation } from '../src/impulse/hooks'  // From template
 import { Routes } from './routeTree'
 import { CreateResidentSchema } from './validation'
 import type { CreateResidentRequest, CreateResidentResponse } from './types'
@@ -116,8 +122,12 @@ export const CreateResidentSchema = z.object({
 ### types.ts
 
 ```typescript
+export interface ResidentListProps {
+  residents: Array<{ id: number; name: string }>
+}
+
 export interface ResidentDetailProps {
-  resident: { id: number; name: string }
+  resident: { id: number; name: string; email: string }
   createdAt: string
 }
 
@@ -125,11 +135,30 @@ export interface CreateResidentRequest {
   name: string
   email: string
 }
+
+export interface CreateResidentResponse {
+  id: number
+}
 ```
 
 ---
 
 ## 3. Developer API (C#)
+
+### Routes.g.cs (Generated)
+
+```csharp
+// Auto-generated from [Impulse] attributes
+public static class Routes
+{
+    public static class Residents
+    {
+        public const string List = "/residents";
+        public const string Detail = "/residents/{id:int}";
+        public const string Create = "/residents";
+    }
+}
+```
 
 ### Program.cs
 
@@ -183,14 +212,16 @@ public class CreateResidentValidator : AbstractValidator<CreateResidentRequest>
 
 ## 4. Developer API (React)
 
-### Component
+### Component (Typed Loader Data)
 
 ```tsx
 // src/features/Residents/Detail.tsx
-import { useLoaderData } from '@tanstack/react-router'
+import { getRouteApi } from '@tanstack/react-router'
+
+const route = getRouteApi('/residents/$id')  // Type-safe via router registration
 
 export default function ResidentDetail() {
-  const data = useLoaderData()
+  const data = route.useLoaderData()  // Typed: ResidentDetailProps
   return <h1>{data.resident.name}</h1>
 }
 ```
@@ -224,6 +255,52 @@ import { createImpulseRouter } from './generated/routeTree'
 createRoot(document.getElementById('root')!).render(
   <RouterProvider router={createImpulseRouter()} />
 )
+```
+
+### Template: hooks.ts (Provided by Impulse.Templates)
+
+```typescript
+// src/impulse/hooks.ts - Static file from template, not generated
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import type { ZodSchema } from 'zod'
+
+interface MutationOptions<TReq, TRes> {
+  endpoint: string
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  schema: ZodSchema<TReq>
+  onSuccess?: (data: TRes) => void
+}
+
+export function useImpulseMutation<TReq, TRes>(opts: MutationOptions<TReq, TRes>) {
+  const form = useForm<TReq>({ resolver: zodResolver(opts.schema) })
+  const [isSubmitting, setSubmitting] = useState(false)
+
+  const submit = form.handleSubmit(async (data) => {
+    setSubmitting(true)
+    try {
+      const res = await fetch(opts.endpoint, {
+        method: opts.method,
+        headers: { 'Content-Type': 'application/json', 'X-Impulse': '1' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const result = await res.json() as TRes
+      opts.onSuccess?.(result)
+      return result
+    } finally {
+      setSubmitting(false)
+    }
+  })
+
+  return {
+    register: form.register,
+    errors: form.formState.errors,
+    submit,
+    isSubmitting,
+  }
+}
 ```
 
 ---
@@ -263,10 +340,11 @@ const router = createImpulseRouter({
 | .NET 10 | Minimal API, source generators |
 | React 19 | Frontend |
 | TanStack Router | Type-safe routing, context DI, loaders |
+| react-hook-form | Form state, validation binding |
 | FluentValidation | Server validation → generates Zod |
-| Zod | Client validation |
+| Zod | Client validation (generated from FluentValidation) |
 | Bun | Runtime, package manager |
-| Vite | Bundler, HMR |
+| Vite | Bundler, HMR, dev proxy |
 | tsgo | Fast TS compiler |
 
 ---
@@ -292,6 +370,27 @@ dotnet run
 ┌─────────────────────────────────────────────────────────────────┐
 │ HMR: Edit .tsx → ~50ms │ Edit .cs → regenerate → ~2s            │
 └─────────────────────────────────────────────────────────────────┘
+```
+
+### vite.config.ts (Template)
+
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    proxy: {
+      // All non-asset requests proxy to Kestrel
+      '^(?!/src|/node_modules|/@).*': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+    },
+  },
+})
 ```
 
 ---
@@ -338,4 +437,8 @@ Impulse                 → Meta-package (references all below)
 ├── Impulse.MSBuild     → TS extraction task
 ├── Impulse.Runtime     → Middleware, asset manifest
 └── Impulse.Templates   → dotnet new impulse
+    ├── src/impulse/hooks.ts     (useImpulseMutation)
+    ├── src/main.tsx             (app entry)
+    ├── vite.config.ts           (proxy config)
+    └── package.json             (dependencies)
 ```
