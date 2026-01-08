@@ -17,6 +17,9 @@ export { IMPULSE_COMPONENTS, getComponent };
 // TanStack Router available for SPA mode (optional)
 export { router, Routes } from './tanstack-router.g';
 
+// Validation schemas (Zod) - mirrors server-side FluentValidation
+export * from './validation.g';
+
 // ============================================================================
 // Types
 // ============================================================================

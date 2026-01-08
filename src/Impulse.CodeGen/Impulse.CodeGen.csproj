@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Impulse.Core\Impulse.Core.csproj" />
+    <ProjectReference Include="..\Impulse.Validation\Impulse.Validation.csproj" />
   </ItemGroup>
 
 </Project>
