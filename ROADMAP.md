@@ -712,7 +712,266 @@ import type { ResidentDetailProps } from '@generated/types'
 
 ---
 
-## 9. Open Questions
+## 9. Unified "Just Works" Experience
+
+**Goal:** Same experience for end users AND Impulse developers.
+
+### 9.1 End User Experience
+
+```bash
+dotnet new impulse -n MyApp
+cd MyApp
+dotnet run
+# → Browser opens at localhost:5000
+# → Working CRUD app with React + .NET
+# → Edit C# → hot reload
+# → Edit .tsx → HMR
+# → Everything just works
+```
+
+### 9.2 Impulse Developer Experience (This Repo)
+
+```bash
+git clone https://github.com/user/impulse
+cd impulse
+./dev.sh    # or: make dev
+# → Same experience as end user
+# → Uses local packages instead of NuGet.org
+```
+
+### 9.3 The Magic: MSBuild Targets
+
+**Impulse.Sdk.targets** (ships with package):
+```xml
+<Project>
+  <!-- Auto npm install if node_modules missing -->
+  <Target Name="ImpulseRestoreNpm"
+          BeforeTargets="Build"
+          Condition="!Exists('$(MSBuildProjectDirectory)/ClientApp/node_modules')">
+    <Exec Command="npm install" WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp" />
+  </Target>
+
+  <!-- Generate TypeScript on every build -->
+  <Target Name="ImpulseGenerateTS" AfterTargets="Build">
+    <ImpulseGenerateTask
+      ModelPath="$(IntermediateOutputPath)impulse-model.json"
+      OutputDir="$(MSBuildProjectDirectory)/ClientApp/generated" />
+  </Target>
+
+  <!-- Start Vite dev server with dotnet run -->
+  <Target Name="ImpulseStartVite"
+          BeforeTargets="Run"
+          Condition="'$(ASPNETCORE_ENVIRONMENT)' == 'Development'">
+    <Exec Command="npm run dev"
+          WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp"
+          ContinueOnError="true" />
+  </Target>
+
+  <!-- Build client for publish -->
+  <Target Name="ImpulseBuildClient" BeforeTargets="Publish">
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp" />
+  </Target>
+
+  <Target Name="ImpulseCopyAssets" AfterTargets="ImpulseBuildClient">
+    <ItemGroup>
+      <ClientAssets Include="$(MSBuildProjectDirectory)/ClientApp/dist/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ClientAssets)"
+          DestinationFolder="$(PublishDir)wwwroot/%(RecursiveDir)" />
+  </Target>
+</Project>
+```
+
+### 9.4 Single Line Setup
+
+**Program.cs:**
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddImpulse();  // Registers services, validators, handlers
+
+var app = builder.Build();
+
+app.UseImpulse();  // Static files, SPA fallback, dev proxy
+
+// Your endpoints (source generator adds Routes.g.cs)
+app.MapResidentsEndpoints();  // Generated extension method
+
+app.Run();
+```
+
+**What `AddImpulse()` does:**
+```csharp
+public static IServiceCollection AddImpulse(this WebApplicationBuilder builder)
+{
+    // Auto-discover and register validators
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+    // Auto-discover and register [ImpulseHandler] classes
+    builder.Services.AddImpulseHandlers();
+
+    // Asset manifest for production
+    builder.Services.AddSingleton<AssetManifest>();
+
+    return builder.Services;
+}
+```
+
+**What `UseImpulse()` does:**
+```csharp
+public static IApplicationBuilder UseImpulse(this WebApplication app)
+{
+    if (app.Environment.IsDevelopment())
+    {
+        // Proxy non-API requests to Vite dev server
+        app.UseImpulseDevProxy("http://localhost:5173");
+    }
+    else
+    {
+        // Serve static files with caching
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            OnPrepareResponse = ctx =>
+            {
+                if (ctx.File.Name.Contains("-"))
+                    ctx.Context.Response.Headers.CacheControl =
+                        "public, max-age=31536000, immutable";
+            }
+        });
+    }
+
+    // SPA fallback - serve index.html for client routes
+    app.UseImpulseSpaFallback();
+
+    return app;
+}
+```
+
+### 9.5 Zero Config vite.config.ts
+
+**Template includes pre-configured Vite:**
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+import path from 'path'
+
+export default defineConfig({
+  plugins: [
+    TanStackRouterVite({
+      routesDirectory: './generated/routes',
+      generatedRouteTree: './generated/routeTree.gen.ts',
+    }),
+    react(),
+  ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, '../'),
+      '@generated': path.resolve(__dirname, './generated'),
+    },
+  },
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': 'http://localhost:5000',  // API calls go to .NET
+    },
+  },
+  build: {
+    outDir: 'dist',
+    manifest: true,
+  },
+})
+```
+
+### 9.6 This Repo: Identical Experience
+
+**Directory.Build.props** (at repo root):
+```xml
+<Project>
+  <PropertyGroup>
+    <!-- Use local packages, not NuGet.org -->
+    <RestorePackagesPath>$(MSBuildThisFileDirectory)artifacts/packages</RestorePackagesPath>
+    <Version>0.0.1-local</Version>
+  </PropertyGroup>
+
+  <!-- Import Impulse targets from local source -->
+  <Import Project="$(MSBuildThisFileDirectory)src/Impulse.MSBuild/Impulse.Sdk.targets"
+          Condition="Exists('...')" />
+</Project>
+```
+
+**dev.sh:**
+```bash
+#!/bin/bash
+set -e
+
+echo "🔧 Building Impulse packages..."
+dotnet build src/Impulse.sln
+
+echo "🚀 Starting sample app..."
+cd samples/Impulse.Sample
+dotnet run
+
+# That's it. Same as end user experience.
+# MSBuild targets handle:
+# - npm install (if needed)
+# - TypeScript generation
+# - Vite dev server
+# - Hot reload
+```
+
+### 9.7 First Run Flow
+
+```
+dotnet new impulse -n MyApp
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Template creates:               │
+│ - MyApp.csproj (with Impulse)  │
+│ - Program.cs (AddImpulse/Use)  │
+│ - ClientApp/ (package.json)    │
+│ - Features/Residents/ (example)│
+└─────────────────────────────────┘
+         │
+         ▼
+      dotnet run
+         │
+         ▼
+┌─────────────────────────────────┐
+│ MSBuild targets:                │
+│ 1. npm install (auto)          │
+│ 2. Source generator runs       │
+│ 3. TS generator runs           │
+│ 4. Vite dev server starts      │
+│ 5. Kestrel starts              │
+└─────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Browser opens:                  │
+│ - localhost:5000               │
+│ - Working app                   │
+│ - Edit anything → live reload  │
+└─────────────────────────────────┘
+```
+
+### 9.8 Key Insight: No Manual Steps
+
+**What users DON'T need to do:**
+- ❌ Run `npm install` manually
+- ❌ Start Vite in separate terminal
+- ❌ Run code generators
+- ❌ Configure proxy
+- ❌ Set up hot reload
+- ❌ Configure TypeScript paths
+- ❌ Worry about hashed assets
+
+**Everything is automated by MSBuild + runtime.**
+
+---
+
+## 10. Open Questions
 
 - [ ] Virtual file routes vs physical files for TanStack?
 - [ ] Embed assets in DLL vs serve from wwwroot?
