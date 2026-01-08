@@ -74,16 +74,17 @@ record ImpulseModel(
 );
 
 record EndpointModel(
-    string Route,              // "/residents/{id:int}"
-    string RouteName,          // "ResidentDetail"
-    string ComponentPath,      // "@features/Residents/Detail"
+    string Route,              // "/residents/{id:int}" (C# format)
+    string TanStackPath,       // "/residents/$id" (generated for TS)
+    string RouteName,          // "residentDetail"
+    string ComponentPath,      // "../src/features/Residents/Detail"
     TypeModel PropsType,
     IReadOnlyList<DeferredModel> Deferred
 );
 
 record MutationModel(
     string Route,              // "/residents"
-    string RouteName,          // "CreateResident"
+    string RouteName,          // "createResident"
     HttpMethod Method,         // POST, PUT, DELETE
     TypeModel RequestType,
     TypeModel ResponseType
@@ -91,7 +92,13 @@ record MutationModel(
 
 record ValidatorModel(
     string TypeName,           // "CreateResidentRequest"
-    IReadOnlyList<PropertyRules> Rules
+    IReadOnlyList<RuleModel> Rules
+);
+
+record RuleModel(
+    string PropertyName,
+    string RuleType,           // "NotEmpty", "MaxLength", "Email"
+    object? Parameter          // 100 for MaxLength(100)
 );
 ```
 
@@ -107,6 +114,7 @@ import {
   createRoute,
   createRootRouteWithContext,
   defer,
+  lazyRouteComponent,
 } from '@tanstack/react-router'
 
 // ============================================
@@ -118,7 +126,7 @@ export interface ImpulseContext {
 }
 
 // User extends via module augmentation:
-// declare module '@impulse/generated/routeTree' {
+// declare module './routeTree' {
 //   interface ImpulseContext { analytics: AnalyticsClient }
 // }
 
@@ -144,14 +152,14 @@ export const Routes = {
 // ROUTES - Use context for fetch
 // ============================================
 const rootRoute = createRootRouteWithContext<ImpulseContext>()({
-  component: () => import('../src/App'),
+  component: lazyRouteComponent(() => import('../src/App')),
 })
 
 const residentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePaths.residents,
   loader: ({ context }) => context.impulseFetch(RoutePaths.residents),
-  component: () => import('@features/Residents/List'),
+  component: lazyRouteComponent(() => import('../src/features/Residents/List')),
 })
 
 const residentDetailRoute = createRoute({
@@ -164,7 +172,7 @@ const residentDetailRoute = createRoute({
       medications: defer(context.impulseFetch(Routes.residentMedications(params.id))),
     }
   },
-  component: () => import('@features/Residents/Detail'),
+  component: lazyRouteComponent(() => import('../src/features/Residents/Detail')),
 })
 
 export const routeTree = rootRoute.addChildren([
@@ -195,19 +203,20 @@ export function createImpulseRouter(userContext?: Partial<ImpulseContext>) {
 ### 4.2 mutations.ts (with Invalidation)
 
 ```typescript
-import { Routes } from './routeTree'
 import { useRouter } from '@tanstack/react-router'
-import { CreateResidentSchema } from './validation'
+import { useImpulseMutation } from '@impulse/react'
+import { Routes } from './routeTree'
+import { CreateResidentSchema, UpdateResidentSchema } from './validation'
 import type { CreateResidentRequest, CreateResidentResponse } from './types'
 
 export function useCreateResident() {
   const router = useRouter()
 
   return useImpulseMutation<CreateResidentRequest, CreateResidentResponse>({
-    endpoint: Routes.residents(),  // NO STRINGS
+    endpoint: Routes.residents(),
     method: 'POST',
     schema: CreateResidentSchema,
-    onSuccess: () => router.invalidate(),  // Refresh all route data
+    onSuccess: () => router.invalidate(),
   })
 }
 
@@ -215,7 +224,7 @@ export function useUpdateResident(id: number) {
   const router = useRouter()
 
   return useImpulseMutation({
-    endpoint: Routes.residentDetail(id),  // NO STRINGS
+    endpoint: Routes.residentDetail(id),
     method: 'PUT',
     schema: UpdateResidentSchema,
     onSuccess: () => router.invalidate(),
@@ -254,6 +263,9 @@ export const UpdateResidentSchema = z.object({
 ### 4.4 types.ts
 
 ```typescript
+// TanStack Router's deferred type
+import type { DeferredPromise } from '@tanstack/react-router'
+
 export interface ResidentSummary {
   id: number
   name: string
@@ -262,6 +274,10 @@ export interface ResidentSummary {
 export interface ResidentDetailProps {
   resident: ResidentSummary
   createdAt: string
+}
+
+export interface MedicationList {
+  items: Array<{ id: number; name: string; dosage: string }>
 }
 
 export interface CreateResidentRequest {
@@ -273,11 +289,9 @@ export interface CreateResidentResponse {
   id: number
 }
 
-export type Deferred<T> = Promise<T>
-
 export interface ResidentDetailLoaderData {
   props: ResidentDetailProps
-  medications: Deferred<MedicationList>
+  medications: DeferredPromise<MedicationList>
 }
 ```
 
@@ -338,11 +352,12 @@ public class CreateResidentValidator : AbstractValidator<CreateResidentRequest>
 ### 5.4 React Component
 
 ```tsx
+// src/features/Residents/Detail.tsx
 import { useLoaderData } from '@tanstack/react-router'
-import type { ResidentDetailProps } from '@impulse/generated/types'
+import type { ResidentDetailLoaderData } from '../../generated/types'
 
 export default function ResidentDetail() {
-  const { props } = useLoaderData()
+  const { props } = useLoaderData() as ResidentDetailLoaderData
   return <h1>{props.resident.name}</h1>
 }
 ```
@@ -350,7 +365,8 @@ export default function ResidentDetail() {
 ### 5.5 React Form with Mutation
 
 ```tsx
-import { useCreateResident } from '@impulse/generated/mutations'
+// src/features/Residents/Create.tsx
+import { useCreateResident } from '../../generated/mutations'
 
 export default function CreateResident() {
   const { register, errors, submit, isSubmitting } = useCreateResident()
@@ -368,14 +384,18 @@ export default function CreateResident() {
 ### 5.6 App Entry (main.tsx)
 
 ```tsx
+// src/main.tsx
+import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from '@tanstack/react-router'
-import { createImpulseRouter } from '@impulse/generated/routeTree'
+import { createImpulseRouter } from './generated/routeTree'
 
 const router = createImpulseRouter()
 
 createRoot(document.getElementById('root')!).render(
-  <RouterProvider router={router} />
+  <StrictMode>
+    <RouterProvider router={router} />
+  </StrictMode>
 )
 ```
 
@@ -386,9 +406,13 @@ createRoot(document.getElementById('root')!).render(
 ### 6.1 Extend Router Context
 
 ```typescript
-import { createImpulseRouter, ImpulseContext } from '@impulse/generated/routeTree'
+// src/router.ts
+import { createImpulseRouter } from './generated/routeTree'
+import type { ImpulseContext } from './generated/routeTree'
+import { AnalyticsClient } from './analytics'
 
-declare module '@impulse/generated/routeTree' {
+// Extend context type via module augmentation
+declare module './generated/routeTree' {
   interface ImpulseContext {
     analytics: AnalyticsClient
   }
@@ -402,12 +426,16 @@ export const router = createImpulseRouter({
 ### 6.2 Override Fetch (Auth, Logging)
 
 ```typescript
+// src/router.ts
+import { createImpulseRouter } from './generated/routeTree'
+
 const router = createImpulseRouter({
   impulseFetch: async (url) => {
     const token = await getAuthToken()
     const res = await fetch(url, {
       headers: { 'X-Impulse': '1', 'Authorization': `Bearer ${token}` },
     })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
   },
 })
@@ -533,7 +561,7 @@ MUTATION FLOW:
 │  Developer Code                    Roslyn + Source Generator                 │
 │  ┌────────────────────┐           ┌────────────────────────────────────┐   │
 │  │ Program.cs         │           │                                    │   │
-│  │ MapGet("/residents")│    ──►   │  Routes.g.cs      (C# constants)   │   │
+│  │ MapGet(Routes....) │    ──►    │  Routes.g.cs      (C# constants)   │   │
 │  │   .Impulse<Props>()│           │  TypeScript.g.cs  (embedded TS)    │   │
 │  │                    │           │                                    │   │
 │  │ Validator.cs       │           └────────────────────────────────────┘   │
@@ -564,7 +592,7 @@ MUTATION FLOW:
 │  │      KESTREL (.NET)         │      │      VITE (Bun)             │       │
 │  │      localhost:5000         │      │      localhost:5173         │       │
 │  │                             │      │                             │       │
-│  │  • API endpoints            │      │  • React app                │       │
+│  │  • Impulse routes           │      │  • React app                │       │
 │  │  • Server-driven props      │      │  • HMR WebSocket            │       │
 │  │  • Content negotiation      │      │  • Watches *.tsx            │       │
 │  │  • X-Impulse header check   │      │  • Watches generated/       │       │
@@ -578,7 +606,7 @@ MUTATION FLOW:
 │  │                                                                         ││
 │  │   React App ◄───── HMR WebSocket ────► Vite                            ││
 │  │       │                                                                 ││
-│  │       │ context.impulseFetch('/residents/1')                           ││
+│  │       │ context.impulseFetch(Routes.residentDetail(1))                 ││
 │  │       │ (X-Impulse: 1 header)                                          ││
 │  │       │                                                                 ││
 │  │       └────────► Vite Proxy ────────► Kestrel ────────► JSON           ││
@@ -786,10 +814,11 @@ MUTATION FLOW:
 dotnet new impulse -n MyApp
 cd MyApp
 dotnet run
-# → Browser opens at localhost:5000
+# → Browser opens at localhost:5173 (Vite dev server)
+# → Vite proxies to Kestrel at localhost:5000
 # → Working CRUD app with React + .NET
-# → Edit C# → hot reload (~2s)
-# → Edit .tsx → HMR (~50ms)
+# → Edit C# → recompile + regenerate → HMR (~2s)
+# → Edit .tsx → Vite HMR (~50ms)
 # → Everything just works
 ```
 
