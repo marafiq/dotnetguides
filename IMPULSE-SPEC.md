@@ -7,7 +7,8 @@
 1. **Server-Driven** - Same URL returns HTML (browser) or JSON (`X-Impulse: 1` header)
 2. **Zero Magic Strings** - All paths from generated `RoutePaths` / `Routes` constants
 3. **Type Safety** - C# types → TypeScript types, FluentValidation → Zod
-4. **Single Command** - `dotnet run` handles everything (build, generate, serve, HMR)
+4. **Test-First** - Write tests before handlers, tests define the contract
+5. **Single Command** - `dotnet run` handles everything (build, generate, serve, HMR)
 
 ---
 
@@ -31,11 +32,19 @@ MyApp/
 ├── Validators/                # YOU WRITE: FluentValidation rules
 ├── Models/                    # YOU WRITE: Props types (C# records)
 │
+├── Tests/                     # YOU WRITE: Tests FIRST
+│   ├── Handlers/
+│   │   └── ResidentsHandlerTests.cs
+│   └── Validators/
+│       └── CreateResidentValidatorTests.cs
+│
 ├── src/
 │   ├── features/              # YOU WRITE: React components
 │   │   └── Residents/
 │   │       ├── List.tsx
-│   │       └── Detail.tsx
+│   │       ├── List.test.tsx  # YOU WRITE: Test FIRST
+│   │       ├── Detail.tsx
+│   │       └── Detail.test.tsx
 │   ├── App.tsx                # YOU WRITE: Root layout
 │   ├── main.tsx               # FROM TEMPLATE: App entry
 │   └── impulse/
@@ -52,7 +61,7 @@ MyApp/
 ```
 
 **Legend:**
-- `YOU WRITE` - Your application code
+- `YOU WRITE` - Your application code (tests first!)
 - `FROM TEMPLATE` - Static files, can customize
 - `AUTO-GENERATED` - Regenerated on C# changes, don't edit
 
@@ -381,7 +390,212 @@ const { analytics } = useRouterContext()
 
 ---
 
-## 8. Tech Stack
+## 8. Testing Your App
+
+**Write tests first. Tests define what your handler should do.**
+
+### Test-First: Handler
+
+```csharp
+// 1. Write the test FIRST (RED)
+public class ResidentsHandlerTests
+{
+    [Fact]
+    public async Task Detail_Returns_Resident_When_Found()
+    {
+        // Arrange - define expected behavior
+        var service = new MockResidentService();
+        service.Setup(1, new Resident { Id = 1, Name = "John" });
+
+        // Act
+        var result = await ResidentsHandler.Detail(1, service, CancellationToken.None);
+
+        // Assert - exact contract
+        var ok = result.Result.Should().BeOfType<Ok<ResidentDetailProps>>().Subject;
+        ok.Value.Resident.Name.Should().Be("John");
+    }
+
+    [Fact]
+    public async Task Detail_Returns_NotFound_When_Missing()
+    {
+        var service = new MockResidentService();  // No setup = not found
+
+        var result = await ResidentsHandler.Detail(999, service, CancellationToken.None);
+
+        result.Result.Should().BeOfType<NotFound>();
+    }
+}
+
+// 2. Run test - it fails (method doesn't exist)
+// 3. Write minimal handler to pass (GREEN)
+// 4. Refactor with confidence
+```
+
+### Test-First: Validator
+
+```csharp
+public class CreateResidentValidatorTests
+{
+    private readonly CreateResidentValidator _validator = new();
+
+    [Fact]
+    public void Rejects_Empty_Name()
+    {
+        var request = new CreateResidentRequest("", "test@example.com");
+
+        var result = _validator.Validate(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Name");
+    }
+
+    [Fact]
+    public void Rejects_Invalid_Email()
+    {
+        var request = new CreateResidentRequest("John", "not-an-email");
+
+        var result = _validator.Validate(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "Email");
+    }
+
+    [Fact]
+    public void Accepts_Valid_Request()
+    {
+        var request = new CreateResidentRequest("John", "john@example.com");
+
+        var result = _validator.Validate(request);
+
+        result.IsValid.Should().BeTrue();
+    }
+}
+```
+
+### Integration Test: Full Request
+
+```csharp
+public class ResidentsIntegrationTests : IClassFixture<ImpulseTestFixture>
+{
+    private readonly HttpClient _client;
+
+    public ResidentsIntegrationTests(ImpulseTestFixture fixture)
+    {
+        _client = fixture.CreateClient();
+    }
+
+    [Fact]
+    public async Task Get_Residents_Returns_JSON_With_Impulse_Header()
+    {
+        _client.DefaultRequestHeaders.Add("X-Impulse", "1");
+
+        var response = await _client.GetAsync(Routes.Residents.List);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.Should().Be("application/json");
+
+        var props = await response.Content.ReadFromJsonAsync<ResidentListProps>();
+        props.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Get_Residents_Returns_HTML_Without_Header()
+    {
+        var response = await _client.GetAsync(Routes.Residents.List);
+
+        response.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
+        var html = await response.Content.ReadAsStringAsync();
+        html.Should().Contain("__IMPULSE_PROPS__");
+    }
+}
+```
+
+### Component Test (Vitest)
+
+```typescript
+// src/features/Residents/Detail.test.tsx
+import { render, screen } from '@testing-library/react'
+import { createTestRouter } from '@impulse/testing'
+import ResidentDetail from './Detail'
+
+describe('ResidentDetail', () => {
+  it('displays resident name from loader data', async () => {
+    // Arrange - mock loader data
+    const router = createTestRouter({
+      loaderData: {
+        '/residents/$id': {
+          resident: { id: 1, name: 'John Doe', email: 'john@example.com' },
+          createdAt: '2024-01-01',
+        },
+      },
+    })
+
+    // Act
+    render(<ResidentDetail />, { wrapper: router })
+
+    // Assert
+    expect(await screen.findByText('John Doe')).toBeInTheDocument()
+  })
+})
+```
+
+### Form Test (Vitest)
+
+```typescript
+// src/features/Residents/Create.test.tsx
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { createTestRouter, mockMutation } from '@impulse/testing'
+import CreateResident from './Create'
+
+describe('CreateResident', () => {
+  it('submits valid form data', async () => {
+    const onSubmit = mockMutation()
+    const router = createTestRouter({ mutations: { useCreateResident: onSubmit } })
+
+    render(<CreateResident />, { wrapper: router })
+
+    fireEvent.change(screen.getByRole('textbox', { name: /name/i }), {
+      target: { value: 'John Doe' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: /email/i }), {
+      target: { value: 'john@example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /create/i }))
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({
+        name: 'John Doe',
+        email: 'john@example.com',
+      })
+    })
+  })
+
+  it('shows validation errors for invalid input', async () => {
+    render(<CreateResident />, { wrapper: createTestRouter() })
+
+    fireEvent.click(screen.getByRole('button', { name: /create/i }))
+
+    expect(await screen.findByText(/name is required/i)).toBeInTheDocument()
+  })
+})
+```
+
+### Run Tests
+
+```bash
+# C# tests
+dotnet test
+
+# TypeScript tests
+bun test
+
+# All tests (before commit)
+dotnet test && bun test
+```
+
+---
+
+## 9. Tech Stack
 
 | You Use | Purpose |
 |---------|---------|

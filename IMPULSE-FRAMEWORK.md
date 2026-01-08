@@ -2,341 +2,542 @@
 
 > How we build and maintain the Impulse framework
 
-This document is for developers working on Impulse itself, not app developers using Impulse.
+This document is for developers working on Impulse itself.
 
 ---
 
-## 1. NuGet Package Structure
+## Core Principle: Test-Driven Development
+
+**Every function starts with a failing test.**
+
+TDD is not a quality gate we check at the end. It's how we design:
 
 ```
-Impulse                     → Meta-package (references all below)
-├── Impulse.Core            → Public API for app developers
-├── Impulse.SourceGen       → Roslyn incremental generator
-├── Impulse.MSBuild         → TypeScript extraction task
-├── Impulse.Runtime         → Request handling middleware
-└── Impulse.Templates       → dotnet new impulse template
+1. Write test that defines the contract (RED)
+2. See it fail - confirms test works
+3. Write minimal code to pass (GREEN)
+4. Refactor with confidence
 ```
 
-### Impulse.Core
+Tests are the specification. If you can't write a test first, you don't understand the requirement.
 
-**What it provides:**
-- `[Impulse]` attribute
-- `.Impulse<TProps>()` extension method
-- `AddImpulse()` / `UseImpulse()` extensions
+---
+
+## 1. TDD by Example: Type Emitter
+
+We need a function that converts C# `record` to TypeScript `interface`.
+
+### Step 1: Write the Test (RED)
 
 ```csharp
-// Public API
-[Impulse("/residents")]
-public static class ResidentsRoutes { }
-
-app.MapGet("/residents", Handler).Impulse<ResidentListProps>();
-```
-
-### Impulse.SourceGen
-
-**Roslyn incremental source generator that produces:**
-
-1. `Routes.g.cs` - C# route constants
-2. `TypeScript.g.cs` - Embedded TS with markers
-
-```csharp
-// Generated: Routes.g.cs
-public static partial class Routes
+public class TypeScriptTypeEmitterTests
 {
-    public static class Residents
+    [Fact]
+    public void Emits_Interface_From_Record()
     {
-        public const string List = "/residents";
-        public const string Detail = "/residents/{id:int}";
+        // Arrange - define the contract
+        var record = new RecordInfo(
+            Name: "PersonProps",
+            Properties: [
+                new("Name", "string"),
+                new("Age", "int")
+            ]);
+
+        // Act
+        var result = TypeScriptTypeEmitter.Emit(record);
+
+        // Assert - exact expected output
+        result.Should().Be("""
+            export interface PersonProps {
+              name: string
+              age: number
+            }
+            """);
+    }
+
+    [Fact]
+    public void Emits_Nullable_As_Union()
+    {
+        var record = new RecordInfo(
+            Name: "OptionalProps",
+            Properties: [new("Value", "int?")]);
+
+        var result = TypeScriptTypeEmitter.Emit(record);
+
+        result.Should().Contain("value: number | null");
+    }
+
+    [Fact]
+    public void Emits_Array_From_IReadOnlyList()
+    {
+        var record = new RecordInfo(
+            Name: "ListProps",
+            Properties: [new("Items", "IReadOnlyList<string>")]);
+
+        var result = TypeScriptTypeEmitter.Emit(record);
+
+        result.Should().Contain("items: Array<string>");
     }
 }
 ```
 
+### Step 2: Run Tests - They Fail
+
+```
+FAILED: TypeScriptTypeEmitter does not exist
+```
+
+Good. The test defines what we need to build.
+
+### Step 3: Minimal Implementation (GREEN)
+
 ```csharp
-// Generated: TypeScript.g.cs (embedded TS)
-internal static class GeneratedTypeScript
+public static class TypeScriptTypeEmitter
 {
-    public const string Content = """
-        /* IMPULSE:types.ts */
-        export interface ResidentListProps { ... }
-        /* IMPULSE:routeTree.ts */
-        export const RoutePaths = { ... }
-        """;
+    public static string Emit(RecordInfo record)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"export interface {record.Name} {{");
+
+        foreach (var prop in record.Properties)
+        {
+            var tsType = MapType(prop.Type);
+            var tsName = ToCamelCase(prop.Name);
+            sb.AppendLine($"  {tsName}: {tsType}");
+        }
+
+        sb.AppendLine("}");
+        return sb.ToString().Trim();
+    }
+
+    private static string MapType(string csharpType) => csharpType switch
+    {
+        "string" => "string",
+        "int" or "long" => "number",
+        "bool" => "boolean",
+        var t when t.EndsWith("?") => $"{MapType(t[..^1])} | null",
+        var t when t.StartsWith("IReadOnlyList<") =>
+            $"Array<{MapType(t[14..^1])}>",
+        _ => "unknown"
+    };
+
+    private static string ToCamelCase(string s) =>
+        char.ToLowerInvariant(s[0]) + s[1..];
 }
 ```
 
-### Impulse.MSBuild
-
-**MSBuild task that:**
-1. Reads `TypeScript.g.cs` after build
-2. Extracts content between `/* IMPULSE:filename */` markers
-3. Writes to `generated/filename.ts`
-
-```xml
-<Target Name="ExtractImpulseTypeScript" AfterTargets="Build">
-  <ImpulseExtractTypeScript
-    SourceFile="$(IntermediateOutputPath)TypeScript.g.cs"
-    OutputDirectory="$(ProjectDir)generated" />
-</Target>
-```
-
-### Impulse.Runtime
-
-**Middleware that handles:**
-1. Content negotiation (`X-Impulse` header detection)
-2. HTML rendering with `__IMPULSE_PROPS__` injection
-3. Asset manifest reading for hashed URLs
-4. Static file serving for production
-
-### Impulse.Templates
-
-**Template content for `dotnet new impulse`:**
+### Step 4: Run Tests - They Pass
 
 ```
-content/
-├── MyApp.csproj.template
-├── Program.cs.template
-├── src/
-│   ├── main.tsx
-│   ├── App.tsx
-│   └── impulse/
-│       └── hooks.ts          # useImpulseMutation implementation
-├── vite.config.ts
-├── package.json
-└── tsconfig.json
+PASSED: 3/3 tests
 ```
+
+### Step 5: Refactor
+
+Now we can safely refactor (extract methods, improve naming) because tests guard correctness.
 
 ---
 
-## 2. Source Generator Implementation
+## 2. TDD: Zod Schema Emitter
 
-### Input Analysis
+### Tests First
 
 ```csharp
-[Generator]
-public class ImpulseGenerator : IIncrementalGenerator
+public class ZodSchemaEmitterTests
 {
-    public void Initialize(IncrementalGeneratorInitializationContext context)
+    [Fact]
+    public void Emits_NotEmpty_As_Min1()
     {
-        // Find all .Impulse<T>() calls
-        var impulseRoutes = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                predicate: IsImpulseCall,
-                transform: ExtractRouteInfo)
-            .Where(x => x is not null);
+        var validator = new ValidatorInfo(
+            TypeName: "CreatePersonRequest",
+            Rules: [new("Name", "NotEmpty")]);
 
-        // Find all FluentValidation validators
-        var validators = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                predicate: IsValidatorClass,
-                transform: ExtractValidationRules)
-            .Where(x => x is not null);
+        var result = ZodSchemaEmitter.Emit(validator);
 
-        // Combine and generate
-        context.RegisterSourceOutput(
-            impulseRoutes.Collect().Combine(validators.Collect()),
-            GenerateOutput);
+        result.Should().Contain("name: z.string().min(1)");
+    }
+
+    [Fact]
+    public void Emits_MaxLength()
+    {
+        var validator = new ValidatorInfo(
+            TypeName: "CreatePersonRequest",
+            Rules: [new("Name", "MaximumLength", 100)]);
+
+        var result = ZodSchemaEmitter.Emit(validator);
+
+        result.Should().Contain("name: z.string().max(100)");
+    }
+
+    [Fact]
+    public void Chains_Multiple_Rules()
+    {
+        var validator = new ValidatorInfo(
+            TypeName: "CreatePersonRequest",
+            Rules: [
+                new("Email", "NotEmpty"),
+                new("Email", "EmailAddress")
+            ]);
+
+        var result = ZodSchemaEmitter.Emit(validator);
+
+        result.Should().Contain("email: z.string().min(1).email()");
+    }
+
+    [Fact]
+    public void Exports_Named_Schema()
+    {
+        var validator = new ValidatorInfo(
+            TypeName: "CreatePersonRequest",
+            Rules: []);
+
+        var result = ZodSchemaEmitter.Emit(validator);
+
+        result.Should().StartWith("export const CreatePersonSchema = z.object({");
     }
 }
 ```
 
-### Output Generation
+### Implementation Follows Tests
 
 ```csharp
-private void GenerateOutput(SourceProductionContext ctx, (Routes, Validators) input)
+public static class ZodSchemaEmitter
 {
-    var (routes, validators) = input;
+    public static string Emit(ValidatorInfo validator)
+    {
+        var schemaName = validator.TypeName.Replace("Request", "Schema");
+        var sb = new StringBuilder();
+        sb.AppendLine($"export const {schemaName} = z.object({{");
 
-    // C# routes
-    ctx.AddSource("Routes.g.cs", GenerateCSharpRoutes(routes));
+        var rulesByProp = validator.Rules.GroupBy(r => r.Property);
+        foreach (var group in rulesByProp)
+        {
+            var chain = string.Join("", group.Select(MapRule));
+            var propName = ToCamelCase(group.Key);
+            sb.AppendLine($"  {propName}: z.string(){chain},");
+        }
 
-    // Embedded TypeScript
-    var ts = new StringBuilder();
-    ts.AppendLine(GenerateTypes(routes));
-    ts.AppendLine(GenerateValidation(validators));
-    ts.AppendLine(GenerateMutations(routes, validators));
-    ts.AppendLine(GenerateRouteTree(routes));
+        sb.AppendLine("})");
+        return sb.ToString();
+    }
 
-    ctx.AddSource("TypeScript.g.cs", WrapAsEmbeddedTs(ts));
+    private static string MapRule(ValidationRule rule) => rule.Type switch
+    {
+        "NotEmpty" => ".min(1)",
+        "MaximumLength" => $".max({rule.Param})",
+        "EmailAddress" => ".email()",
+        "GreaterThan" => $".gt({rule.Param})",
+        _ => ""
+    };
 }
 ```
 
 ---
 
-## 3. TypeScript Generation Patterns
+## 3. TDD: Content Negotiation Middleware
 
-### Type Mapping (C# → TypeScript)
-
-| C# Type | TypeScript Type |
-|---------|-----------------|
-| `string` | `string` |
-| `int`, `long` | `number` |
-| `bool` | `boolean` |
-| `DateTime` | `string` (ISO format) |
-| `Guid` | `string` |
-| `T?` | `T \| null` |
-| `IReadOnlyList<T>` | `Array<T>` |
-| `record` | `interface` |
-
-### FluentValidation → Zod Mapping
-
-| FluentValidation | Zod |
-|------------------|-----|
-| `.NotEmpty()` | `.min(1)` |
-| `.MaximumLength(n)` | `.max(n)` |
-| `.EmailAddress()` | `.email()` |
-| `.GreaterThan(n)` | `.gt(n)` |
-| `.Must(...)` | `.refine(...)` |
-
----
-
-## 4. Dev Server Orchestration
-
-`dotnet run` triggers:
-
-```
-1. MSBuild compiles C#
-2. Source generator runs
-3. MSBuild extracts TypeScript
-4. Kestrel starts (:5000)
-5. Impulse.Runtime spawns Vite child process (:5173)
-6. Browser opens localhost:5173
-```
-
-**File watcher flow:**
-```
-.cs file change
-    → dotnet watch rebuild
-    → Source generator re-runs
-    → MSBuild extracts new TS
-    → Vite detects generated/*.ts change
-    → HMR updates browser
-```
-
----
-
-## 5. Production Build Pipeline
-
-`dotnet publish -c Release` triggers:
-
-```
-1. MSBuild compiles C# (Release)
-2. Source generator runs
-3. MSBuild extracts TypeScript
-4. MSBuild runs: bun run build
-5. Vite produces dist/assets/index-[hash].js
-6. MSBuild copies dist/ to wwwroot/
-7. Generates manifest.json (asset hash map)
-8. Publishes single deployable folder
-```
-
----
-
-## 6. Testing Strategy
-
-### Unit Tests (Impulse.SourceGen.Tests)
+### Tests Define Behavior
 
 ```csharp
-[Fact]
-public void Generates_TypeScript_Interface_From_Record()
+public class ContentNegotiatorTests
 {
-    var source = """
-        public record PersonProps(string Name, int Age);
-        """;
+    [Fact]
+    public void Returns_HTML_When_No_Impulse_Header()
+    {
+        var request = new MockRequest(headers: []);
 
-    var result = GeneratorTestHelper.Run(source);
+        var result = ContentNegotiator.ShouldReturnJson(request);
 
-    result.GeneratedSources.Should().Contain(s =>
-        s.Contains("export interface PersonProps") &&
-        s.Contains("name: string") &&
-        s.Contains("age: number"));
+        result.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Returns_JSON_When_Impulse_Header_Present()
+    {
+        var request = new MockRequest(headers: [("X-Impulse", "1")]);
+
+        var result = ContentNegotiator.ShouldReturnJson(request);
+
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Returns_JSON_When_Accept_Header_Is_Json()
+    {
+        var request = new MockRequest(headers: [("Accept", "application/json")]);
+
+        var result = ContentNegotiator.ShouldReturnJson(request);
+
+        result.Should().BeTrue();
+    }
 }
 ```
 
-### Integration Tests (Impulse.Tests)
+### Implementation
 
 ```csharp
-[Fact]
-public async Task Returns_HTML_Without_Impulse_Header()
+public static class ContentNegotiator
 {
-    await using var app = new ImpulseTestApp();
-    var response = await app.Client.GetAsync("/residents");
+    public static bool ShouldReturnJson(HttpRequest request)
+    {
+        if (request.Headers.ContainsKey("X-Impulse"))
+            return true;
 
-    response.ContentType.Should().Be("text/html");
-    var html = await response.Content.ReadAsStringAsync();
-    html.Should().Contain("__IMPULSE_PROPS__");
+        if (request.Headers.Accept.Contains("application/json"))
+            return true;
+
+        return false;
+    }
 }
-
-[Fact]
-public async Task Returns_JSON_With_Impulse_Header()
-{
-    await using var app = new ImpulseTestApp();
-    app.Client.DefaultRequestHeaders.Add("X-Impulse", "1");
-
-    var response = await app.Client.GetAsync("/residents");
-
-    response.ContentType.Should().Be("application/json");
-}
-```
-
-### E2E Tests (Playwright)
-
-```typescript
-test('creates resident and sees in list', async ({ page }) => {
-  await page.goto('/residents/new')
-  await page.fill('[name="name"]', 'John Doe')
-  await page.fill('[name="email"]', 'john@example.com')
-  await page.click('button[type="submit"]')
-
-  // After mutation, router.invalidate() refreshes list
-  await expect(page.locator('text=John Doe')).toBeVisible()
-})
 ```
 
 ---
 
-## 7. Key Implementation Files
+## 4. TDD: Route Tree Emitter
+
+### Tests Define Output Format
+
+```csharp
+public class RouteTreeEmitterTests
+{
+    [Fact]
+    public void Emits_RoutePaths_Constants()
+    {
+        var routes = new[] {
+            new RouteInfo("/residents", "ResidentListProps"),
+            new RouteInfo("/residents/{id:int}", "ResidentDetailProps")
+        };
+
+        var result = RouteTreeEmitter.EmitRoutePaths(routes);
+
+        result.Should().Contain("residents: '/residents'");
+        result.Should().Contain("residentDetail: '/residents/$id'");
+    }
+
+    [Fact]
+    public void Emits_Route_Builder_For_Parameterized_Routes()
+    {
+        var routes = new[] {
+            new RouteInfo("/residents/{id:int}", "ResidentDetailProps")
+        };
+
+        var result = RouteTreeEmitter.EmitRouteBuilders(routes);
+
+        result.Should().Contain(
+            "residentDetail: (id: number | string) =>");
+        result.Should().Contain(
+            "RoutePaths.residentDetail.replace('$id', String(id))");
+    }
+
+    [Fact]
+    public void Emits_Typed_Loader()
+    {
+        var routes = new[] {
+            new RouteInfo("/residents", "ResidentListProps")
+        };
+
+        var result = RouteTreeEmitter.EmitRoute(routes[0]);
+
+        result.Should().Contain(
+            "context.impulseFetch<ResidentListProps>(RoutePaths.residents)");
+    }
+}
+```
+
+---
+
+## 5. TDD: MSBuild Extraction Task
+
+### Tests Define File Parsing
+
+```csharp
+public class ExtractTypeScriptTaskTests
+{
+    [Fact]
+    public void Extracts_Single_File()
+    {
+        var input = """
+            /* IMPULSE:types.ts */
+            export interface Foo { }
+            """;
+
+        var result = TypeScriptExtractor.Extract(input);
+
+        result.Should().ContainKey("types.ts");
+        result["types.ts"].Should().Be("export interface Foo { }");
+    }
+
+    [Fact]
+    public void Extracts_Multiple_Files()
+    {
+        var input = """
+            /* IMPULSE:types.ts */
+            export interface Foo { }
+            /* IMPULSE:validation.ts */
+            export const FooSchema = z.object({})
+            """;
+
+        var result = TypeScriptExtractor.Extract(input);
+
+        result.Should().HaveCount(2);
+        result.Should().ContainKey("types.ts");
+        result.Should().ContainKey("validation.ts");
+    }
+
+    [Fact]
+    public void Trims_Whitespace()
+    {
+        var input = """
+            /* IMPULSE:types.ts */
+
+            export interface Foo { }
+
+            """;
+
+        var result = TypeScriptExtractor.Extract(input);
+
+        result["types.ts"].Should().Be("export interface Foo { }");
+    }
+}
+```
+
+---
+
+## 6. Integration Tests (After Unit Tests Pass)
+
+Once unit tests define and verify individual functions, integration tests verify they work together:
+
+```csharp
+public class ImpulseIntegrationTests
+{
+    [Fact]
+    public async Task Full_Pipeline_Generates_Correct_TypeScript()
+    {
+        // Arrange - full C# source
+        var source = """
+            public record PersonProps(string Name, int Age);
+
+            public class CreatePersonValidator : AbstractValidator<CreatePersonRequest>
+            {
+                public CreatePersonValidator()
+                {
+                    RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
+                }
+            }
+
+            app.MapGet("/people", Handler).Impulse<PersonProps>();
+            """;
+
+        // Act - run full generator
+        var result = await GeneratorTestHelper.RunFullPipeline(source);
+
+        // Assert - verify all outputs
+        result["types.ts"].Should().Contain("export interface PersonProps");
+        result["validation.ts"].Should().Contain("export const CreatePersonSchema");
+        result["routeTree.ts"].Should().Contain("RoutePaths");
+    }
+}
+```
+
+---
+
+## 7. NuGet Package Structure
+
+```
+Impulse                     → Meta-package
+├── Impulse.Core            → Public API
+├── Impulse.SourceGen       → Roslyn generator (tested via unit tests)
+├── Impulse.MSBuild         → TS extraction (tested via unit tests)
+├── Impulse.Runtime         → Middleware (tested via unit tests)
+└── Impulse.Templates       → dotnet new template
+```
+
+---
+
+## 8. Type Mappings (Reference)
+
+### C# → TypeScript
+
+| C# Type | TypeScript Type | Test Case |
+|---------|-----------------|-----------|
+| `string` | `string` | `Emits_String_Type` |
+| `int`, `long` | `number` | `Emits_Number_Type` |
+| `bool` | `boolean` | `Emits_Boolean_Type` |
+| `DateTime` | `string` | `Emits_DateTime_As_String` |
+| `T?` | `T \| null` | `Emits_Nullable_As_Union` |
+| `IReadOnlyList<T>` | `Array<T>` | `Emits_Array_From_IReadOnlyList` |
+
+### FluentValidation → Zod
+
+| FluentValidation | Zod | Test Case |
+|------------------|-----|-----------|
+| `.NotEmpty()` | `.min(1)` | `Emits_NotEmpty_As_Min1` |
+| `.MaximumLength(n)` | `.max(n)` | `Emits_MaxLength` |
+| `.EmailAddress()` | `.email()` | `Emits_EmailAddress` |
+
+---
+
+## 9. Implementation Files
+
+Each file has a corresponding test file:
 
 ```
 src/
-├── Impulse.Core/
-│   ├── ImpulseAttribute.cs
-│   ├── ImpulseEndpointExtensions.cs
-│   └── ImpulseServiceExtensions.cs
-│
 ├── Impulse.SourceGen/
-│   ├── ImpulseGenerator.cs
-│   ├── Analyzers/
-│   │   ├── RouteAnalyzer.cs
-│   │   └── ValidatorAnalyzer.cs
-│   └── Emitters/
-│       ├── CSharpRouteEmitter.cs
-│       ├── TypeScriptTypeEmitter.cs
-│       ├── ZodSchemaEmitter.cs
-│       └── RouteTreeEmitter.cs
+│   ├── Emitters/
+│   │   ├── TypeScriptTypeEmitter.cs      ← TypeScriptTypeEmitterTests.cs
+│   │   ├── ZodSchemaEmitter.cs           ← ZodSchemaEmitterTests.cs
+│   │   └── RouteTreeEmitter.cs           ← RouteTreeEmitterTests.cs
+│   └── Analyzers/
+│       ├── RouteAnalyzer.cs              ← RouteAnalyzerTests.cs
+│       └── ValidatorAnalyzer.cs          ← ValidatorAnalyzerTests.cs
 │
 ├── Impulse.MSBuild/
-│   └── ExtractTypeScriptTask.cs
+│   └── TypeScriptExtractor.cs            ← TypeScriptExtractorTests.cs
 │
 ├── Impulse.Runtime/
-│   ├── ImpulseMiddleware.cs
-│   ├── ContentNegotiator.cs
-│   ├── HtmlRenderer.cs
-│   └── AssetManifest.cs
-│
-└── Impulse.Templates/
-    └── content/
-        └── (template files)
+│   ├── ContentNegotiator.cs              ← ContentNegotiatorTests.cs
+│   └── HtmlRenderer.cs                   ← HtmlRendererTests.cs
+```
+
+**Rule: No implementation file without a test file.**
+
+---
+
+## 10. Development Workflow
+
+```bash
+# 1. Create test file first
+touch tests/Impulse.SourceGen.Tests/NewFeatureTests.cs
+
+# 2. Write failing tests
+dotnet test  # RED
+
+# 3. Create implementation
+touch src/Impulse.SourceGen/NewFeature.cs
+
+# 4. Make tests pass
+dotnet test  # GREEN
+
+# 5. Refactor with confidence
+dotnet test  # Still GREEN
 ```
 
 ---
 
-## 8. Release Checklist
+## 11. Quality Gates
 
-1. [ ] All tests pass
-2. [ ] Version bumped in all .csproj files
-3. [ ] CHANGELOG.md updated
-4. [ ] Template content matches spec
-5. [ ] NuGet packages build locally
-6. [ ] Test `dotnet new impulse` with local packages
-7. [ ] Tag release in git
-8. [ ] Push to NuGet.org
+Before any PR:
+
+```bash
+# All tests must pass
+dotnet test
+
+# Coverage must not decrease
+dotnet test --collect:"XPlat Code Coverage"
+
+# No implementation without tests
+# (enforced by PR review)
+```
+
+**Tests are not optional. Tests are the specification.**

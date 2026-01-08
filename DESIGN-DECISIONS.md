@@ -8,6 +8,35 @@ This document captures the reasoning behind key architectural decisions, based o
 
 ---
 
+## 0. Test-Driven Development as Core Pillar
+
+**Decision:** TDD is not optional. Every function starts with a failing test.
+
+**Reasoning:**
+- Tests ARE the specification - if you can't write a test, you don't understand the requirement
+- Tests define the contract before implementation exists
+- Red-green-refactor ensures minimal, correct code
+- Refactoring is safe because tests guard correctness
+- Quality comes from the process, not inspection after
+
+**What TDD is NOT:**
+- ❌ Writing tests after implementation (that's verification, not design)
+- ❌ A checkbox to satisfy code coverage metrics
+- ❌ Optional for "simple" functions
+
+**What TDD IS:**
+- ✅ Test defines what the function should do
+- ✅ Test fails first (proves test works)
+- ✅ Minimal code to pass (no over-engineering)
+- ✅ Refactor with confidence
+
+**Implementation:**
+- Framework code: every emitter/analyzer has test file written first
+- App code: handlers and components have test files in project structure
+- CI/CD: tests must pass before merge, coverage must not decrease
+
+---
+
 ## 1. Server-Driven vs API-First
 
 **Decision:** Same URL returns HTML or JSON based on `X-Impulse` header.
