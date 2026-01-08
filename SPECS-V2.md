@@ -98,6 +98,16 @@ ModelBuilder.Traversal
   ✓ collects all referenced types
   ✓ deduplicates by name
   ✓ handles circular references
+
+ModelBuilder.FromFluentValidator
+  ✓ finds AbstractValidator<T> implementations
+  ✓ extracts RuleFor(x => x.Property) → PropertyName
+  ✓ extracts .NotEmpty() → RuleKind.NotEmpty
+  ✓ extracts .MaximumLength(n) → RuleKind.MaxLength, Value: n
+  ✓ extracts .EmailAddress() → RuleKind.Email
+  ✓ extracts .GreaterThan(n) → RuleKind.GreaterThan, Value: n
+  ✓ extracts .Matches(pattern) → RuleKind.Regex, Value: pattern
+  ✓ chains multiple rules on same property
 ```
 
 ---
@@ -135,36 +145,53 @@ export interface ResidentSummary {
 }
 ```
 
-### RoutesGenerator
+### RoutesGenerator (TanStack Router)
 
 ```
 RoutesGenerator.Emit(model)
-  ✓ emits route constants with path and method
-  ✓ emits component path
-  ✓ emits lazy import function
-  ✓ emits deferred/lazy metadata
-  ✓ emits type-safe path builders for params
+  ✓ emits createFileRoute for each endpoint
+  ✓ converts {id:int} to $id param format
+  ✓ emits loader with typed props fetch
+  ✓ emits deferred/lazy in loader
+  ✓ generates routeTree with parent/child hierarchy
 ```
 
 **Input:**
 ```csharp
-new EndpointModel("/residents/{id:int}", GET, "./Residents/Detail", ...)
+new EndpointModel("/residents/{id:int}", GET, "./Residents/Detail", propsType, ...)
 ```
 
 **Output:**
 ```typescript
-export const routes = {
-  residentDetail: {
-    path: '/residents/:id',
-    method: 'GET',
-    component: './Residents/Detail',
-  },
-} as const;
+// routes/residents/$id.tsx
+import { createFileRoute } from '@tanstack/react-router'
+import type { ResidentDetailProps } from '../types.g'
 
-export const residentDetailPath = (id: number) => `/residents/${id}`;
+export const Route = createFileRoute('/residents/$id')({
+  loader: async ({ params }) => {
+    const res = await fetch(`/api/residents/${params.id}`)
+    return res.json() as Promise<ResidentDetailProps>
+  },
+  component: () => import('../Features/Residents/Detail'),
+})
 ```
 
-### ZodGenerator
+**With Deferred:**
+```typescript
+export const Route = createFileRoute('/residents/$id')({
+  loader: async ({ params }) => {
+    const props = fetch(`/api/residents/${params.id}`).then(r => r.json())
+    return {
+      props: await props,
+      meds: defer(fetch(`/api/residents/${params.id}/meds`).then(r => r.json())),
+    }
+  },
+})
+```
+
+### ZodGenerator (from FluentValidation only)
+
+**Zod schemas are generated ONLY for types with FluentValidation validators.**
 
 ```
 ZodGenerator.Emit(model)
