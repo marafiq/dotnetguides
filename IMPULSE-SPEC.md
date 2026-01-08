@@ -32,7 +32,7 @@ MyApp/
 ├── Validators/                # YOU WRITE: FluentValidation rules
 ├── Models/                    # YOU WRITE: Props types (C# records)
 │
-├── Tests/                     # YOU WRITE: Tests FIRST
+├── Tests/                     # YOU WRITE: Unit tests FIRST
 │   ├── Handlers/
 │   │   └── ResidentsHandlerTests.cs
 │   └── Validators/
@@ -42,13 +42,16 @@ MyApp/
 │   ├── features/              # YOU WRITE: React components
 │   │   └── Residents/
 │   │       ├── List.tsx
-│   │       ├── List.test.tsx  # YOU WRITE: Test FIRST
+│   │       ├── List.test.tsx  # YOU WRITE: Component test FIRST
 │   │       ├── Detail.tsx
 │   │       └── Detail.test.tsx
 │   ├── App.tsx                # YOU WRITE: Root layout
 │   ├── main.tsx               # FROM TEMPLATE: App entry
 │   └── impulse/
 │       └── hooks.ts           # FROM TEMPLATE: useImpulseMutation
+│
+├── e2e/                       # YOU WRITE: E2E tests (Playwright)
+│   └── residents.spec.ts      # Full browser flow tests
 │
 ├── generated/                 # AUTO-GENERATED (don't edit)
 │   ├── types.ts               # C# records → TS interfaces
@@ -57,6 +60,7 @@ MyApp/
 │   └── routeTree.ts           # Routes + loaders + router
 │
 ├── vite.config.ts             # FROM TEMPLATE: Dev proxy config
+├── playwright.config.ts       # FROM TEMPLATE: E2E config
 └── package.json               # FROM TEMPLATE: Dependencies
 ```
 
@@ -584,17 +588,150 @@ describe('CreateResident', () => {
 })
 ```
 
-### Run Tests
+### E2E Tests (Playwright) - Full Impulse Flow
+
+**Critical: Test the real browser experience with all Impulse features.**
+
+```typescript
+// e2e/residents.spec.ts
+import { test, expect } from '@playwright/test'
+
+test.describe('Residents', () => {
+  test('initial load returns server-rendered HTML with props', async ({ page }) => {
+    // Server-driven: first load is full HTML
+    await page.goto('/residents')
+
+    // Page rendered server-side with data
+    await expect(page.locator('h1')).toContainText('Residents')
+
+    // Props embedded in HTML (hydration data)
+    const propsScript = page.locator('script#__IMPULSE_PROPS__')
+    await expect(propsScript).toBeAttached()
+  })
+
+  test('client navigation fetches JSON only', async ({ page }) => {
+    await page.goto('/residents')
+
+    // Intercept the navigation request
+    const [request] = await Promise.all([
+      page.waitForRequest(req =>
+        req.url().includes('/residents/1') &&
+        req.headers()['x-impulse'] === '1'
+      ),
+      page.click('a[href="/residents/1"]'),
+    ])
+
+    // Verify X-Impulse header sent
+    expect(request.headers()['x-impulse']).toBe('1')
+
+    // Page updated without full reload
+    await expect(page.locator('h1')).toContainText('Resident Details')
+  })
+
+  test('form submission with validation', async ({ page }) => {
+    await page.goto('/residents/new')
+
+    // Submit empty form - client validation (Zod)
+    await page.click('button[type="submit"]')
+    await expect(page.locator('.error')).toContainText('Name is required')
+
+    // Fill valid data
+    await page.fill('input[name="name"]', 'John Doe')
+    await page.fill('input[name="email"]', 'john@example.com')
+
+    // Intercept mutation request
+    const [response] = await Promise.all([
+      page.waitForResponse(res =>
+        res.url().includes('/residents') &&
+        res.request().method() === 'POST'
+      ),
+      page.click('button[type="submit"]'),
+    ])
+
+    expect(response.status()).toBe(201)
+  })
+
+  test('mutation invalidates and refreshes list', async ({ page }) => {
+    await page.goto('/residents')
+
+    // Count initial residents
+    const initialCount = await page.locator('.resident-item').count()
+
+    // Navigate to create form
+    await page.click('a[href="/residents/new"]')
+    await page.fill('input[name="name"]', 'New Person')
+    await page.fill('input[name="email"]', 'new@example.com')
+
+    // Submit - this should call router.invalidate()
+    await page.click('button[type="submit"]')
+
+    // After redirect, list should be refreshed with new resident
+    await page.waitForURL('/residents')
+    const newCount = await page.locator('.resident-item').count()
+    expect(newCount).toBe(initialCount + 1)
+
+    // New resident visible
+    await expect(page.locator('text=New Person')).toBeVisible()
+  })
+
+  test('type-safe navigation with generated Routes', async ({ page }) => {
+    await page.goto('/residents')
+
+    // Click detail link (uses Routes.residentDetail(id))
+    await page.click('.resident-item:first-child a')
+
+    // URL matches generated route pattern
+    await expect(page).toHaveURL(/\/residents\/\d+/)
+  })
+
+  test('back/forward navigation uses cache', async ({ page }) => {
+    await page.goto('/residents')
+    await page.click('.resident-item:first-child a')
+    await expect(page.locator('h1')).toContainText('Resident Details')
+
+    // Go back
+    await page.goBack()
+    await expect(page.locator('h1')).toContainText('Residents')
+
+    // Forward - should use cached data (no network request)
+    const requests: string[] = []
+    page.on('request', req => requests.push(req.url()))
+
+    await page.goForward()
+    await expect(page.locator('h1')).toContainText('Resident Details')
+
+    // No new data request (served from router cache)
+    const dataRequests = requests.filter(r => r.includes('/residents/'))
+    expect(dataRequests.length).toBe(0)
+  })
+})
+```
+
+### Run E2E Tests
 
 ```bash
-# C# tests
+# Start app and run tests
+dotnet run &
+bunx playwright test
+
+# Or with Impulse test runner (starts app automatically)
+bun run test:e2e
+```
+
+### Run All Tests
+
+```bash
+# Unit tests (C#)
 dotnet test
 
-# TypeScript tests
+# Unit tests (TypeScript)
 bun test
 
+# E2E tests (real browser)
+bun run test:e2e
+
 # All tests (before commit)
-dotnet test && bun test
+dotnet test && bun test && bun run test:e2e
 ```
 
 ---

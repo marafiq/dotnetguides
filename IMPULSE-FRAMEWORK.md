@@ -454,7 +454,158 @@ public class ImpulseIntegrationTests
 
 ---
 
-## 7. NuGet Package Structure
+## 7. E2E Tests - Real Browser (Critical)
+
+**Unit tests verify functions. E2E tests verify Impulse actually works.**
+
+These tests run against the full framework in a real browser:
+
+```typescript
+// tests/e2e/impulse-features.spec.ts
+import { test, expect } from '@playwright/test'
+
+test.describe('Impulse Core Features', () => {
+
+  test('server-driven: initial load is HTML with embedded props', async ({ page }) => {
+    const response = await page.goto('/test-route')
+
+    // Response is HTML, not JSON
+    expect(response?.headers()['content-type']).toContain('text/html')
+
+    // Props embedded in script tag
+    const props = await page.locator('script#__IMPULSE_PROPS__').textContent()
+    expect(props).toBeTruthy()
+    expect(JSON.parse(props!)).toHaveProperty('testData')
+  })
+
+  test('server-driven: client navigation sends X-Impulse header', async ({ page }) => {
+    await page.goto('/test-route')
+
+    // Intercept next navigation
+    const requestPromise = page.waitForRequest(req =>
+      req.url().includes('/other-route') &&
+      req.headers()['x-impulse'] === '1'
+    )
+
+    await page.click('a[href="/other-route"]')
+    const request = await requestPromise
+
+    // X-Impulse header present
+    expect(request.headers()['x-impulse']).toBe('1')
+
+    // Response is JSON, not HTML
+    const response = await request.response()
+    expect(response?.headers()['content-type']).toContain('application/json')
+  })
+
+  test('generated routes: RoutePaths constants work', async ({ page }) => {
+    await page.goto('/')
+
+    // Navigate using generated route
+    await page.click('[data-route="residents"]')
+
+    // URL matches RoutePaths constant
+    await expect(page).toHaveURL('/residents')
+  })
+
+  test('generated routes: parameterized Routes.xyz(id) work', async ({ page }) => {
+    await page.goto('/residents')
+
+    // Click link that uses Routes.residentDetail(123)
+    await page.click('[data-resident-id="123"]')
+
+    // URL correctly substituted
+    await expect(page).toHaveURL('/residents/123')
+  })
+
+  test('mutations: POST with Zod validation', async ({ page }) => {
+    await page.goto('/test-form')
+
+    // Submit invalid - Zod catches it client-side
+    await page.click('button[type="submit"]')
+    await expect(page.locator('.validation-error')).toBeVisible()
+
+    // Submit valid
+    await page.fill('input[name="name"]', 'Test')
+    await page.click('button[type="submit"]')
+
+    // Request sent with correct headers
+    const request = await page.waitForRequest(req =>
+      req.method() === 'POST' &&
+      req.headers()['content-type'] === 'application/json' &&
+      req.headers()['x-impulse'] === '1'
+    )
+    expect(request).toBeTruthy()
+  })
+
+  test('invalidation: router.invalidate() refreshes data', async ({ page }) => {
+    await page.goto('/residents')
+    const initialCount = await page.locator('.resident').count()
+
+    // Trigger mutation that calls router.invalidate()
+    await page.click('[data-action="create"]')
+    await page.fill('input[name="name"]', 'New Resident')
+    await page.click('button[type="submit"]')
+
+    // Wait for redirect back to list
+    await page.waitForURL('/residents')
+
+    // List refreshed - new resident appears
+    const newCount = await page.locator('.resident').count()
+    expect(newCount).toBe(initialCount + 1)
+  })
+
+  test('router context: impulseFetch available in loaders', async ({ page }) => {
+    // This test verifies the context is properly injected
+    await page.goto('/context-test')
+
+    // Component that displays context status
+    await expect(page.locator('[data-context="impulseFetch"]')).toHaveText('available')
+    await expect(page.locator('[data-context="invalidate"]')).toHaveText('available')
+  })
+
+  test('type safety: loader data correctly typed', async ({ page }) => {
+    await page.goto('/typed-route')
+
+    // Component uses typed loader data
+    // If types were wrong, this wouldn't render correctly
+    await expect(page.locator('[data-typed-field="name"]')).toHaveText('Expected Name')
+  })
+
+})
+```
+
+### E2E Test Matrix
+
+| Feature | What to Test |
+|---------|--------------|
+| Server-Driven | Initial load is HTML, navigation is JSON |
+| X-Impulse Header | Sent on client navigation, not on initial load |
+| RoutePaths | Constants resolve to correct URLs |
+| Routes builders | Parameters substituted correctly |
+| Zod validation | Client-side validation before submit |
+| Mutations | Correct method, headers, body |
+| Invalidation | Data refreshes after mutation |
+| Router context | impulseFetch and invalidate available |
+| Type safety | Loader data matches TypeScript types |
+
+### Running E2E Tests
+
+```bash
+# Start test app
+cd tests/Impulse.E2E
+dotnet run &
+
+# Run Playwright
+bunx playwright test
+
+# CI: use Impulse test harness
+dotnet test --filter "Category=E2E"
+```
+
+---
+
+## 8. NuGet Package Structure
 
 ```
 Impulse                     → Meta-package
@@ -467,7 +618,7 @@ Impulse                     → Meta-package
 
 ---
 
-## 8. Type Mappings (Reference)
+## 9. Type Mappings (Reference)
 
 ### C# → TypeScript
 
@@ -490,7 +641,7 @@ Impulse                     → Meta-package
 
 ---
 
-## 9. Implementation Files
+## 10. Implementation Files
 
 Each file has a corresponding test file:
 
@@ -517,7 +668,7 @@ src/
 
 ---
 
-## 10. Development Workflow
+## 11. Development Workflow
 
 ```bash
 # 1. Create test file first
@@ -538,7 +689,7 @@ dotnet test  # Still GREEN
 
 ---
 
-## 11. Quality Gates
+## 12. Quality Gates
 
 Before any PR:
 
