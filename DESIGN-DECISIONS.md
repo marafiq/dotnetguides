@@ -12,28 +12,69 @@ This document captures the reasoning behind key architectural decisions, based o
 
 **Decision:** TDD is not optional. Every function starts with a failing test.
 
-**Reasoning:**
-- Tests ARE the specification - if you can't write a test, you don't understand the requirement
-- Tests define the contract before implementation exists
-- Red-green-refactor ensures minimal, correct code
-- Refactoring is safe because tests guard correctness
-- Quality comes from the process, not inspection after
+### Tests Do Two Things
 
-**What TDD is NOT:**
-- ❌ Writing tests after implementation (that's verification, not design)
-- ❌ A checkbox to satisfy code coverage metrics
-- ❌ Optional for "simple" functions
+**1. Verify Behavior** - Tests confirm code does what it should:
+- Handler returns correct data
+- Validation rejects invalid input
+- Component renders expected output
 
-**What TDD IS:**
+**2. Improve Code Quality** - Writing tests FIRST forces better design:
+
+| Hard to test | Easy to test (better design) |
+|--------------|------------------------------|
+| Function does 5 things | Function does 1 thing |
+| Hidden dependencies | Explicit dependencies (DI) |
+| Global state | Pure functions |
+| Tightly coupled | Loosely coupled |
+| Large classes | Small, focused classes |
+
+**If it's hard to test, the design is wrong.** The test is telling you something.
+
+### Why Test-First Works
+
+```
+Test-First:
+  Write test → Forces you to think about interface first
+             → Reveals awkward APIs before you're committed
+             → Dependencies must be injectable (testable = flexible)
+             → Naturally produces small, focused functions
+
+Test-After:
+  Write code → Interface already decided (maybe poorly)
+             → Tests bend to fit existing code
+             → Hard-to-test code stays hard to test
+             → "I'll refactor later" (you won't)
+```
+
+### Red-Green-Refactor
+
+```
+RED:    Write failing test → Defines the contract
+GREEN:  Minimal code to pass → No over-engineering
+REFACTOR: Improve with confidence → Tests guard correctness
+```
+
+### What TDD is NOT
+
+- ❌ Writing tests after implementation (that's verification only, no design benefit)
+- ❌ A checkbox to satisfy coverage metrics
+- ❌ Optional for "simple" functions (simple functions are easy to test - no excuse)
+
+### What TDD IS
+
 - ✅ Test defines what the function should do
 - ✅ Test fails first (proves test works)
-- ✅ Minimal code to pass (no over-engineering)
+- ✅ Difficulty writing test = design feedback
+- ✅ Minimal code to pass (no speculative features)
 - ✅ Refactor with confidence
 
-**Implementation:**
+### Implementation
+
 - Framework code: every emitter/analyzer has test file written first
 - App code: handlers and components have test files in project structure
-- CI/CD: tests must pass before merge, coverage must not decrease
+- CI/CD: tests must pass before merge
+- Code review: reject PRs where tests came after implementation
 
 ---
 

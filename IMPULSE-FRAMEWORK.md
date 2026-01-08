@@ -10,13 +10,26 @@ This document is for developers working on Impulse itself.
 
 **Every function starts with a failing test.**
 
-TDD is not a quality gate we check at the end. It's how we design:
+### Tests Do Two Things
+
+1. **Verify behavior** - confirm code does what it should
+2. **Improve code quality** - writing tests FIRST forces better design
+
+| Hard to test | Easy to test (better design) |
+|--------------|------------------------------|
+| Function does 5 things | Function does 1 thing |
+| Hidden dependencies | Explicit dependencies (DI) |
+| Tightly coupled | Loosely coupled |
+
+**If it's hard to test, the design is wrong.** The test is telling you something.
+
+### Red-Green-Refactor
 
 ```
 1. Write test that defines the contract (RED)
 2. See it fail - confirms test works
 3. Write minimal code to pass (GREEN)
-4. Refactor with confidence
+4. Refactor with confidence - tests guard correctness
 ```
 
 Tests are the specification. If you can't write a test first, you don't understand the requirement.

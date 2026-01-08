@@ -392,7 +392,11 @@ const { analytics } = useRouterContext()
 
 ## 8. Testing Your App
 
-**Write tests first. Tests define what your handler should do.**
+**Tests do two things:**
+1. **Verify behavior** - confirm your code does what it should
+2. **Improve code quality** - writing tests FIRST forces better design
+
+If it's hard to test, the design is wrong. The test is telling you something.
 
 ### Test-First: Handler
 
