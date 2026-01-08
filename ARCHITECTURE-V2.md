@@ -43,16 +43,72 @@ sb.AppendLine($"export interface {name} {{");
 
 ## v2 Design: All Truth in Extension Methods
 
-### Principle 1: Explicit > Implicit
+### Principle 1: Explicit > Implicit with TypedResults
 
 ```csharp
-// OLD: Magic path derivation
+// OLD: Magic path derivation, untyped
 app.MapGet("/residents", handler)
    .AsComponent<ResidentsListProps>();
 
-// NEW: Explicit path, typed result
+// NEW: TypedResults - compiler knows the return type
 app.MapGet("/residents", () =>
-    Impulse.View("./Residents/List", ResidentsHandler.GetList()));
+    TypedResults.Ok(new ResidentsListProps(...)))
+   .Impulse("./Residents/List");
+
+// Even better: Custom ImpulseResult<T>
+app.MapGet("/residents", ResidentsHandler.List);
+
+public static class ResidentsHandler
+{
+    // TypedResults gives compile-time type inference
+    public static Results<Ok<ResidentsListProps>, NotFound> List()
+    {
+        var data = GetResidents();
+        return data.Any()
+            ? TypedResults.Ok(new ResidentsListProps(data, data.Count))
+            : TypedResults.NotFound();
+    }
+
+    public static Results<Ok<ResidentDetailProps>, NotFound> Detail(int id)
+    {
+        var resident = GetResident(id);
+        return resident is not null
+            ? TypedResults.Ok(new ResidentDetailProps(...))
+            : TypedResults.NotFound();
+    }
+}
+```
+
+### Source Generator Extracts from TypedResults
+
+```csharp
+// Source generator sees: Results<Ok<ResidentsListProps>, NotFound>
+// Extracts: ResidentsListProps as the success type
+// Knows: Can return 200 or 404
+
+static EndpointInfo? ExtractEndpointInfo(GeneratorSyntaxContext ctx, CancellationToken _)
+{
+    // Find method return type
+    var method = GetHandlerMethod(invocation);
+    var returnType = ctx.SemanticModel.GetTypeInfo(method).Type;
+
+    // Extract from Results<Ok<T>, ...>
+    if (returnType is INamedTypeSymbol results &&
+        results.Name == "Results")
+    {
+        foreach (var typeArg in results.TypeArguments)
+        {
+            if (typeArg is INamedTypeSymbol okType &&
+                okType.Name == "Ok" &&
+                okType.TypeArguments.Length == 1)
+            {
+                // Found the success Props type
+                return okType.TypeArguments[0];
+            }
+        }
+    }
+    return null;
+}
 ```
 
 ### Principle 2: No Global State
