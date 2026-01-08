@@ -13,6 +13,7 @@ public sealed class ImpulseCodeGenRunner
     private readonly ContextGenerator _contextGenerator;
     private readonly RoutesGenerator _routesGenerator;
     private readonly RegistryGenerator _registryGenerator;
+    private readonly TanStackRouterGenerator _tanStackRouterGenerator;
 
     public ImpulseCodeGenRunner(ImpulseCodeGenOptions options)
     {
@@ -21,6 +22,7 @@ public sealed class ImpulseCodeGenRunner
         _contextGenerator = new ContextGenerator(_typeGenerator);
         _routesGenerator = new RoutesGenerator();
         _registryGenerator = new RegistryGenerator();
+        _tanStackRouterGenerator = new TanStackRouterGenerator();
     }
 
     /// <summary>
@@ -46,6 +48,10 @@ public sealed class ImpulseCodeGenRunner
         // Generate registry.g.ts
         var registryContent = _registryGenerator.Generate(registry);
         await WriteFileAsync("registry.g.ts", registryContent);
+
+        // Generate tanstack-router.g.ts (TanStack Router from Minimal API)
+        var tanStackContent = _tanStackRouterGenerator.Generate(registry, _options.Version ?? "1.0.0");
+        await WriteFileAsync("tanstack-router.g.ts", tanStackContent);
 
         // Generate index.ts barrel export
         var indexContent = GenerateIndex();
@@ -82,6 +88,7 @@ public sealed class ImpulseCodeGenRunner
             export * from './context.g';
             export * from './routes.g';
             export * from './registry.g';
+            export { router, Routes } from './tanstack-router.g';
             """;
     }
 }
@@ -92,6 +99,7 @@ public sealed class ImpulseCodeGenRunner
 public sealed class ImpulseCodeGenOptions
 {
     public required string OutputDirectory { get; init; }
+    public string? Version { get; init; }
     public Dictionary<string, Dictionary<string, string>>? Permissions { get; init; }
 }
 
