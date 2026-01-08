@@ -1,5 +1,23 @@
 # Impulse v2 - Architecture Fixes
 
+## Core Principle: Server-Driven (NOT API-First)
+
+**Impulse is server-driven.** This is the fundamental difference from typical SPA/API architectures.
+
+| API-First (wrong) | Server-Driven (Impulse) |
+|-------------------|-------------------------|
+| `/api/residents` returns JSON | `/residents` returns HTML or JSON |
+| Client fetches data separately | Same URL, different responses |
+| Two concerns: API + UI | One concern: server controls UI |
+| React decides what to show | Server decides what to show |
+
+**How it works:**
+- `GET /residents` with browser → HTML with embedded props
+- `GET /residents` with `X-Impulse: 1` header → JSON only
+- No separate API layer - the route IS the data source
+
+---
+
 ## Simplified Generated Structure
 
 **4 files. That's it.**
@@ -92,7 +110,7 @@ import type { CreateResidentRequest, CreateResidentResponse } from '../types'
 
 export function useCreateResident() {
   return useImpulseMutation<CreateResidentRequest, CreateResidentResponse>({
-    endpoint: '/api/residents',
+    endpoint: '/residents',  // Same URL pattern - server-driven
     method: 'POST',
     schema: CreateResidentSchema,  // Client validation
   })
@@ -191,6 +209,40 @@ export function ResidentDetail() {
 
 **Solution:** Use TanStack's virtual file routes - generate config, not files.
 
+### Server-Driven Architecture
+
+**Key Insight:** Impulse is NOT API-first. The route URL IS the data source.
+
+```
+Initial Page Load:
+┌─────────────────────────────────────────────────────────────┐
+│ Browser requests: GET /residents/123                         │
+│                                                              │
+│ Server returns HTML with embedded props:                     │
+│ <html>                                                       │
+│   <div id="root">...SSR content...</div>                    │
+│   <script id="__IMPULSE_PROPS__">                           │
+│     {"resident":{"id":123,"name":"John"}}                   │
+│   </script>                                                  │
+│ </html>                                                      │
+│                                                              │
+│ React hydrates with embedded props - NO fetch needed        │
+└─────────────────────────────────────────────────────────────┘
+
+Client-Side Navigation:
+┌─────────────────────────────────────────────────────────────┐
+│ User clicks link to /residents/456                          │
+│                                                              │
+│ TanStack Router loader:                                      │
+│   fetch('/residents/456', { headers: { 'X-Impulse': '1' }}) │
+│                                                              │
+│ Server sees X-Impulse header → returns JSON only:           │
+│   {"resident":{"id":456,"name":"Jane"}}                     │
+│                                                              │
+│ React renders with JSON props - NO full page reload         │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ### What We Generate:
 
 ```typescript
@@ -205,37 +257,35 @@ import {
 import { App } from '../src/App'
 import type { ResidentDetailLoaderData } from './types'
 
+// Impulse fetch - same URL, JSON response for navigation
+const impulseFetch = (url: string) =>
+  fetch(url, { headers: { 'X-Impulse': '1' } }).then(r => r.json())
+
 // Root route (app shell)
 const rootRoute = createRootRoute({
   component: App,
 })
 
-// GET /residents
+// GET /residents (server-driven: same URL for HTML and JSON)
 const residentsIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/residents',
-  loader: async () => {
-    const res = await fetch('/api/residents')
-    return res.json()
-  },
+  loader: () => impulseFetch('/residents'),
   component: () => import('@features/Residents/List'),
 })
 
-// GET /residents/$id (with deferred)
+// GET /residents/$id (with deferred streams from server)
 const residentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/residents/$id',
   loader: async ({ params }): Promise<ResidentDetailLoaderData> => {
-    const props = await fetch(`/api/residents/${params.id}`).then(r => r.json())
+    const props = await impulseFetch(`/residents/${params.id}`)
 
     return {
       props,
-      medications: defer(
-        fetch(`/api/residents/${params.id}/meds`).then(r => r.json())
-      ),
-      appointments: defer(
-        fetch(`/api/residents/${params.id}/appointments`).then(r => r.json())
-      ),
+      // Deferred: Server streams these after initial response
+      medications: defer(impulseFetch(`/residents/${params.id}/medications`)),
+      appointments: defer(impulseFetch(`/residents/${params.id}/appointments`)),
     }
   },
   component: () => import('@features/Residents/Detail'),
@@ -250,8 +300,34 @@ export const routeTree = rootRoute.addChildren([
 // Router instance (exported for main.tsx)
 export const router = createRouter({ routeTree })
 
-// No type registration needed - routes are generated from C#,
-// so typos in route paths are impossible by construction
+// No type registration - routes generated from C#, typos impossible
+```
+
+### Server-Side (what .Impulse<T>() does):
+
+```csharp
+// In Impulse.Runtime middleware
+app.Use(async (context, next) =>
+{
+    await next();
+
+    // If response has Impulse props
+    if (context.Items.TryGetValue("ImpulseProps", out var props))
+    {
+        if (context.Request.Headers.ContainsKey("X-Impulse"))
+        {
+            // Client navigation: return JSON only
+            context.Response.ContentType = "application/json";
+            await JsonSerializer.SerializeAsync(context.Response.Body, props);
+        }
+        else
+        {
+            // Initial load: embed props in HTML
+            var html = await RenderWithProps(props);
+            await context.Response.WriteAsync(html);
+        }
+    }
+});
 ```
 
 ### No TanStack Plugin Needed:
@@ -367,7 +443,7 @@ public static partial class TypeScriptOutput
     /* END:validation.ts */
     """;
 
-    // 3. All mutation hooks in one file
+    // 3. All mutation hooks in one file (server-driven URLs)
     public const string Mutations = """
     /* IMPULSE:mutations.ts */
     import { useImpulseMutation } from '@impulse/react'
@@ -376,7 +452,7 @@ public static partial class TypeScriptOutput
 
     export function useCreateResident() {
       return useImpulseMutation<CreateResidentRequest, CreateResidentResponse>({
-        endpoint: '/api/residents',
+        endpoint: '/residents',  // Server-driven: same URL pattern
         method: 'POST',
         schema: CreateResidentSchema,
       })
@@ -384,7 +460,7 @@ public static partial class TypeScriptOutput
 
     export function useUpdateResident(id: number) {
       return useImpulseMutation({
-        endpoint: `/api/residents/${id}`,
+        endpoint: `/residents/${id}`,  // Server-driven: same URL pattern
         method: 'PUT',
         schema: UpdateResidentSchema,
       })
@@ -392,21 +468,23 @@ public static partial class TypeScriptOutput
     /* END:mutations.ts */
     """;
 
-    // 4. Route tree + router (all in one file)
+    // 4. Route tree + router (server-driven, not API-first)
     public const string RouteTree = """
     /* IMPULSE:routeTree.ts */
     import { createRootRoute, createRoute, createRouter, defer } from '@tanstack/react-router'
     import { App } from '../src/App'
     import type { ResidentDetailLoaderData } from './types'
 
+    // Server-driven: same URL for HTML (initial) and JSON (navigation)
+    const impulseFetch = (url: string) =>
+      fetch(url, { headers: { 'X-Impulse': '1' } }).then(r => r.json())
+
     const rootRoute = createRootRoute({ component: App })
 
     const residentsRoute = createRoute({
       getParentRoute: () => rootRoute,
       path: '/residents',
-      loader: async () => {
-        return fetch('/api/residents').then(r => r.json())
-      },
+      loader: () => impulseFetch('/residents'),
       component: () => import('@features/Residents/List'),
     })
 
@@ -414,10 +492,10 @@ public static partial class TypeScriptOutput
       getParentRoute: () => rootRoute,
       path: '/residents/$id',
       loader: async ({ params }): Promise<ResidentDetailLoaderData> => {
-        const props = await fetch(`/api/residents/${params.id}`).then(r => r.json())
+        const props = await impulseFetch(`/residents/${params.id}`)
         return {
           props,
-          medications: defer(fetch(`/api/residents/${params.id}/meds`).then(r => r.json())),
+          medications: defer(impulseFetch(`/residents/${params.id}/medications`)),
         }
       },
       component: () => import('@features/Residents/Detail'),
@@ -428,10 +506,7 @@ public static partial class TypeScriptOutput
       residentDetailRoute,
     ])
 
-    // Router instance
     export const router = createRouter({ routeTree })
-
-    // No type registration - routes generated from C#, typos impossible
     /* END:routeTree.ts */
     """;
 }
