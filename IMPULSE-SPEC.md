@@ -1,156 +1,54 @@
-# Impulse v2 - Final Specification
+# Impulse v2 Specification
 
 ## Core Principles
 
-1. **Server-Driven** - Route URL is the data source, not a separate API
-2. **Zero Magic Strings** - All paths generated from C# constants
-3. **Router Context** - Dependency injection via TanStack Router context
-4. **Invalidation** - Mutations call `router.invalidate()` to refresh data
-5. **Extensible** - Users extend context with their own dependencies
-6. **4 Generated Files** - types.ts, validation.ts, mutations.ts, routeTree.ts
+1. **Server-Driven** - Same URL returns HTML (browser) or JSON (`X-Impulse: 1` header)
+2. **Zero Magic Strings** - All paths from generated `RoutePaths` / `Routes`
+3. **Router Context** - DI via TanStack Router context, not imports
+4. **Invalidation** - Mutations call `router.invalidate()` to refresh
+5. **4 Generated Files** - types.ts, validation.ts, mutations.ts, routeTree.ts
 
 ---
 
 ## 1. Server-Driven Architecture
 
-**Impulse is NOT API-first.** The route URL IS the data source.
+```
+Initial Load:   GET /residents/123 → HTML with <script id="__IMPULSE_PROPS__">{...}</script>
+Navigation:     GET /residents/123 + X-Impulse:1 → JSON only
+```
 
 | API-First (wrong) | Server-Driven (Impulse) |
 |-------------------|-------------------------|
 | `/api/residents` returns JSON | `/residents` returns HTML or JSON |
-| Client fetches data separately | Same URL, different responses |
-| Two concerns: API + UI | One concern: server controls UI |
-
-**Content Negotiation:**
-- `GET /residents` with browser → HTML with embedded `<script id="__IMPULSE_PROPS__">`
-- `GET /residents` with `X-Impulse: 1` header → JSON only
-
-```
-Initial Page Load:
-┌─────────────────────────────────────────────────────────────┐
-│ Browser: GET /residents/123                                  │
-│                        ↓                                     │
-│ Server returns HTML with embedded props:                     │
-│   <script id="__IMPULSE_PROPS__">{"resident":{...}}</script>│
-│                        ↓                                     │
-│ React hydrates with props - NO fetch needed                  │
-└─────────────────────────────────────────────────────────────┘
-
-Client Navigation:
-┌─────────────────────────────────────────────────────────────┐
-│ User clicks <Link to={Routes.residentDetail(456)}>          │
-│                        ↓                                     │
-│ TanStack loader: fetch('/residents/456', {X-Impulse: '1'})  │
-│                        ↓                                     │
-│ Server returns JSON only                                     │
-│ React renders - NO full page reload                          │
-└─────────────────────────────────────────────────────────────┘
-```
+| Client fetches separately | Same URL, content negotiation |
 
 ---
 
-## 2. Generated Files (4 Total)
+## 2. Generated TypeScript
 
-```
-generated/
-├── types.ts       # All interfaces (props, requests, responses, loader data)
-├── validation.ts  # All Zod schemas (from FluentValidation)
-├── mutations.ts   # Mutation hooks with invalidation
-└── routeTree.ts   # RoutePaths + Routes + router context + router factory
-```
-
----
-
-## 3. ImpulseModel (Core IR)
-
-**Single intermediate representation built from Minimal API code.**
-
-```csharp
-record ImpulseModel(
-    IReadOnlyList<EndpointModel> Endpoints,
-    IReadOnlyList<MutationModel> Mutations,
-    IReadOnlyList<TypeModel> Types,
-    IReadOnlyList<ValidatorModel> Validators
-);
-
-record EndpointModel(
-    string Route,              // "/residents/{id:int}" (C# format)
-    string TanStackPath,       // "/residents/$id" (generated for TS)
-    string RouteName,          // "residentDetail"
-    string ComponentPath,      // "../src/features/Residents/Detail"
-    TypeModel PropsType,
-    IReadOnlyList<DeferredModel> Deferred
-);
-
-record MutationModel(
-    string Route,              // "/residents"
-    string RouteName,          // "createResident"
-    HttpMethod Method,         // POST, PUT, DELETE
-    TypeModel RequestType,
-    TypeModel ResponseType
-);
-
-record ValidatorModel(
-    string TypeName,           // "CreateResidentRequest"
-    IReadOnlyList<RuleModel> Rules
-);
-
-record RuleModel(
-    string PropertyName,
-    string RuleType,           // "NotEmpty", "MaxLength", "Email"
-    object? Parameter          // 100 for MaxLength(100)
-);
-```
-
----
-
-## 4. Generated TypeScript
-
-### 4.1 routeTree.ts (Routes + Context + Router)
+### routeTree.ts
 
 ```typescript
 import {
-  createRouter,
-  createRoute,
-  createRootRouteWithContext,
-  defer,
-  lazyRouteComponent,
+  createRouter, createRoute, createRootRouteWithContext, lazyRouteComponent,
 } from '@tanstack/react-router'
 
-// ============================================
-// ROUTER CONTEXT - Extensible by user
-// ============================================
 export interface ImpulseContext {
   impulseFetch: <T>(url: string) => Promise<T>
   invalidate: () => Promise<void>
 }
 
-// User extends via module augmentation:
-// declare module './routeTree' {
-//   interface ImpulseContext { analytics: AnalyticsClient }
-// }
-
-// ============================================
-// ROUTE PATHS - Single source of truth (from C#)
-// ============================================
 export const RoutePaths = {
   residents: '/residents',
   residentDetail: '/residents/$id',
-  residentMedications: '/residents/$id/medications',
 } as const
 
-// PATH BUILDERS - Derive from RoutePaths, NO inline strings
 export const Routes = {
   residents: () => RoutePaths.residents,
   residentDetail: (id: number | string) =>
     RoutePaths.residentDetail.replace('$id', String(id)),
-  residentMedications: (id: number | string) =>
-    RoutePaths.residentMedications.replace('$id', String(id)),
 }
 
-// ============================================
-// ROUTES - Use context for fetch
-// ============================================
 const rootRoute = createRootRouteWithContext<ImpulseContext>()({
   component: lazyRouteComponent(() => import('../src/App')),
 })
@@ -165,53 +63,36 @@ const residentsRoute = createRoute({
 const residentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePaths.residentDetail,
-  loader: async ({ context, params }) => {
-    const props = await context.impulseFetch(Routes.residentDetail(params.id))
-    return {
-      props,
-      medications: defer(context.impulseFetch(Routes.residentMedications(params.id))),
-    }
-  },
+  loader: ({ context, params }) =>
+    context.impulseFetch(Routes.residentDetail(params.id)),
   component: lazyRouteComponent(() => import('../src/features/Residents/Detail')),
 })
 
-export const routeTree = rootRoute.addChildren([
-  residentsRoute,
-  residentDetailRoute,
-])
+export const routeTree = rootRoute.addChildren([residentsRoute, residentDetailRoute])
 
-// ============================================
-// ROUTER FACTORY - User provides extended context
-// ============================================
 export function createImpulseRouter(userContext?: Partial<ImpulseContext>) {
   const impulseFetch = <T>(url: string): Promise<T> =>
     fetch(url, { headers: { 'X-Impulse': '1' } }).then(r => r.json())
 
   const router = createRouter({
     routeTree,
-    context: {
-      impulseFetch,
-      invalidate: () => router.invalidate(),
-      ...userContext,
-    },
+    context: { impulseFetch, invalidate: () => router.invalidate(), ...userContext },
   })
-
   return router
 }
 ```
 
-### 4.2 mutations.ts (with Invalidation)
+### mutations.ts
 
 ```typescript
 import { useRouter } from '@tanstack/react-router'
 import { useImpulseMutation } from '@impulse/react'
 import { Routes } from './routeTree'
-import { CreateResidentSchema, UpdateResidentSchema } from './validation'
+import { CreateResidentSchema } from './validation'
 import type { CreateResidentRequest, CreateResidentResponse } from './types'
 
 export function useCreateResident() {
   const router = useRouter()
-
   return useImpulseMutation<CreateResidentRequest, CreateResidentResponse>({
     endpoint: Routes.residents(),
     method: 'POST',
@@ -219,33 +100,9 @@ export function useCreateResident() {
     onSuccess: () => router.invalidate(),
   })
 }
-
-export function useUpdateResident(id: number) {
-  const router = useRouter()
-
-  return useImpulseMutation({
-    endpoint: Routes.residentDetail(id),
-    method: 'PUT',
-    schema: UpdateResidentSchema,
-    onSuccess: () => router.invalidate(),
-  })
-}
-
-export function useDeleteResident(id: number) {
-  const router = useRouter()
-
-  return useImpulseMutation({
-    endpoint: Routes.residentDetail(id),
-    method: 'DELETE',
-    onSuccess: async () => {
-      await router.invalidate()
-      router.navigate({ to: Routes.residents() })
-    },
-  })
-}
 ```
 
-### 4.3 validation.ts (from FluentValidation)
+### validation.ts
 
 ```typescript
 import { z } from 'zod'
@@ -254,52 +111,27 @@ export const CreateResidentSchema = z.object({
   name: z.string().min(1).max(100),
   email: z.string().min(1).email(),
 })
-
-export const UpdateResidentSchema = z.object({
-  name: z.string().min(1).max(100),
-})
 ```
 
-### 4.4 types.ts
+### types.ts
 
 ```typescript
-// TanStack Router's deferred type
-import type { DeferredPromise } from '@tanstack/react-router'
-
-export interface ResidentSummary {
-  id: number
-  name: string
-}
-
 export interface ResidentDetailProps {
-  resident: ResidentSummary
+  resident: { id: number; name: string }
   createdAt: string
-}
-
-export interface MedicationList {
-  items: Array<{ id: number; name: string; dosage: string }>
 }
 
 export interface CreateResidentRequest {
   name: string
   email: string
 }
-
-export interface CreateResidentResponse {
-  id: number
-}
-
-export interface ResidentDetailLoaderData {
-  props: ResidentDetailProps
-  medications: DeferredPromise<MedicationList>
-}
 ```
 
 ---
 
-## 5. Developer API (What Users Write)
+## 3. Developer API (C#)
 
-### 5.1 Program.cs
+### Program.cs
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -308,20 +140,18 @@ builder.AddImpulse();
 var app = builder.Build();
 app.UseImpulse();
 
-// Routes - NO magic strings
 app.MapGet(Routes.Residents.List, ResidentsHandler.List)
    .Impulse<ResidentListProps>();
 
 app.MapGet(Routes.Residents.Detail, ResidentsHandler.Detail)
-   .Impulse<ResidentDetailProps>()
-   .Deferred<MedicationList>("medications", Routes.Residents.Medications);
+   .Impulse<ResidentDetailProps>();
 
 app.MapPost(Routes.Residents.Create, ResidentsHandler.Create);
 
 app.Run();
 ```
 
-### 5.2 Handler
+### Handler
 
 ```csharp
 public static class ResidentsHandler
@@ -336,7 +166,7 @@ public static class ResidentsHandler
 }
 ```
 
-### 5.3 Validator (FluentValidation → Zod)
+### Validator (FluentValidation → Zod)
 
 ```csharp
 public class CreateResidentValidator : AbstractValidator<CreateResidentRequest>
@@ -349,20 +179,23 @@ public class CreateResidentValidator : AbstractValidator<CreateResidentRequest>
 }
 ```
 
-### 5.4 React Component
+---
+
+## 4. Developer API (React)
+
+### Component
 
 ```tsx
 // src/features/Residents/Detail.tsx
 import { useLoaderData } from '@tanstack/react-router'
-import type { ResidentDetailLoaderData } from '../../generated/types'
 
 export default function ResidentDetail() {
-  const { props } = useLoaderData() as ResidentDetailLoaderData
-  return <h1>{props.resident.name}</h1>
+  const data = useLoaderData()
+  return <h1>{data.resident.name}</h1>
 }
 ```
 
-### 5.5 React Form with Mutation
+### Form with Mutation
 
 ```tsx
 // src/features/Residents/Create.tsx
@@ -370,7 +203,6 @@ import { useCreateResident } from '../../generated/mutations'
 
 export default function CreateResident() {
   const { register, errors, submit, isSubmitting } = useCreateResident()
-
   return (
     <form onSubmit={submit}>
       <input {...register('name')} />
@@ -381,59 +213,40 @@ export default function CreateResident() {
 }
 ```
 
-### 5.6 App Entry (main.tsx)
+### App Entry
 
 ```tsx
 // src/main.tsx
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from '@tanstack/react-router'
 import { createImpulseRouter } from './generated/routeTree'
 
-const router = createImpulseRouter()
-
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>
+  <RouterProvider router={createImpulseRouter()} />
 )
 ```
 
 ---
 
-## 6. Extensibility
+## 5. Extensibility
 
-### 6.1 Extend Router Context
+### Extend Context
 
 ```typescript
-// src/router.ts
-import { createImpulseRouter } from './generated/routeTree'
-import type { ImpulseContext } from './generated/routeTree'
-import { AnalyticsClient } from './analytics'
-
-// Extend context type via module augmentation
 declare module './generated/routeTree' {
-  interface ImpulseContext {
-    analytics: AnalyticsClient
-  }
+  interface ImpulseContext { analytics: AnalyticsClient }
 }
 
-export const router = createImpulseRouter({
-  analytics: new AnalyticsClient(),
-})
+export const router = createImpulseRouter({ analytics: new AnalyticsClient() })
 ```
 
-### 6.2 Override Fetch (Auth, Logging)
+### Override Fetch
 
 ```typescript
-// src/router.ts
-import { createImpulseRouter } from './generated/routeTree'
-
 const router = createImpulseRouter({
   impulseFetch: async (url) => {
-    const token = await getAuthToken()
     const res = await fetch(url, {
-      headers: { 'X-Impulse': '1', 'Authorization': `Bearer ${token}` },
+      headers: { 'X-Impulse': '1', 'Authorization': `Bearer ${await getToken()}` },
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
@@ -443,425 +256,86 @@ const router = createImpulseRouter({
 
 ---
 
-## 7. Source Generator Output
+## 6. Tech Stack
 
-**TypeScript.g.cs** - Embedded TS extracted by MSBuild:
-
-```csharp
-public static partial class TypeScriptOutput
-{
-    public const string Types = """
-    /* IMPULSE:types.ts */
-    export interface ResidentSummary { id: number; name: string; }
-    // ...
-    /* END:types.ts */
-    """;
-
-    public const string Validation = """
-    /* IMPULSE:validation.ts */
-    import { z } from 'zod'
-    export const CreateResidentSchema = z.object({
-      name: z.string().min(1).max(100),
-      email: z.string().min(1).email(),
-    })
-    /* END:validation.ts */
-    """;
-
-    public const string Mutations = """
-    /* IMPULSE:mutations.ts */
-    // ... (imports Routes, uses router.invalidate())
-    /* END:mutations.ts */
-    """;
-
-    public const string RouteTree = """
-    /* IMPULSE:routeTree.ts */
-    // ... (RoutePaths, Routes, context, factory)
-    /* END:routeTree.ts */
-    """;
-}
-```
-
-**MSBuild extracts via regex** → `ClientApp/generated/*.ts`
+| Tool | Purpose |
+|------|---------|
+| .NET 10 | Minimal API, source generators |
+| React 19 | Frontend |
+| TanStack Router | Type-safe routing, context DI, loaders |
+| FluentValidation | Server validation → generates Zod |
+| Zod | Client validation |
+| Bun | Runtime, package manager |
+| Vite | Bundler, HMR |
+| tsgo | Fast TS compiler |
 
 ---
 
-## 8. Server-Side Runtime
-
-```csharp
-// Impulse middleware - content negotiation
-app.Use(async (context, next) =>
-{
-    await next();
-
-    if (context.Items.TryGetValue("ImpulseProps", out var props))
-    {
-        if (context.Request.Headers.ContainsKey("X-Impulse"))
-        {
-            // Client navigation → JSON
-            context.Response.ContentType = "application/json";
-            await JsonSerializer.SerializeAsync(context.Response.Body, props);
-        }
-        else
-        {
-            // Initial load → HTML with embedded props
-            var html = RenderHtmlWithProps(props);
-            await context.Response.WriteAsync(html);
-        }
-    }
-});
-```
-
----
-
-## 9. Data Flow Summary
+## 7. Development Flow
 
 ```
-MUTATION FLOW:
+dotnet run
+    │
+    ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  1. User submits form with useCreateResident()                  │
-│  2. Client validates with Zod schema                            │
-│  3. POST to Routes.residents() - NO magic string                │
-│  4. Server validates with FluentValidation                      │
-│  5. Returns success or ProblemDetails RFC 7807                  │
-│  6. onSuccess: router.invalidate()                              │
-│  7. All route loaders re-run → UI updates                       │
+│ BUILD: Roslyn → Routes.g.cs + TypeScript.g.cs                   │
+│        MSBuild extracts → generated/*.ts                        │
+└─────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ SERVERS: Kestrel (:5000) + Vite (:5173)                         │
+│          Browser → Vite → proxy to Kestrel for data             │
+└─────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ HMR: Edit .tsx → ~50ms │ Edit .cs → regenerate → ~2s            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 10. Tech Stack
-
-| Layer | Tool | Version | Why |
-|-------|------|---------|-----|
-| **Backend** | .NET | 10 | Minimal API, TypedResults, source generators |
-| **Frontend** | React | 19 | Latest with concurrent features |
-| **Routing** | TanStack Router | 1.x | Type-safe, context-based DI, loaders |
-| **Validation (Server)** | FluentValidation | 11.x | Declarative rules, source generator reads |
-| **Validation (Client)** | Zod | 3.x | Generated from FluentValidation |
-| **JS Runtime** | Bun | 1.x | 10x faster than Node, native TS |
-| **Bundler** | Vite | 6.x | Fast HMR, optimized production builds |
-| **TS Compiler** | tsgo | 1.x | 10x faster than tsc (Go-based) |
-| **Package Manager** | Bun | 1.x | Binary lockfile, faster installs |
-
----
-
-## 11. Development Flow (HMR)
+## 8. Production Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              dotnet run                                      │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ STEP 1: BUILD                                                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Developer Code                    Roslyn + Source Generator                 │
-│  ┌────────────────────┐           ┌────────────────────────────────────┐   │
-│  │ Program.cs         │           │                                    │   │
-│  │ MapGet(Routes....) │    ──►    │  Routes.g.cs      (C# constants)   │   │
-│  │   .Impulse<Props>()│           │  TypeScript.g.cs  (embedded TS)    │   │
-│  │                    │           │                                    │   │
-│  │ Validator.cs       │           └────────────────────────────────────┘   │
-│  │ RuleFor(x.Name)    │                          │                         │
-│  │   .MaxLength(100)  │                          ▼                         │
-│  └────────────────────┘           ┌────────────────────────────────────┐   │
-│                                   │      MSBuild Extract Task          │   │
-│                                   │  regex: /* IMPULSE:file.ts */      │   │
-│                                   └────────────────────────────────────┘   │
-│                                                  │                         │
-│                          ┌───────────────────────┼───────────────────┐     │
-│                          ▼                       ▼                   ▼     │
-│                   ┌───────────┐          ┌───────────┐       ┌───────────┐│
-│                   │ types.ts  │          │validation │       │routeTree  ││
-│                   │mutations.ts│         │   .ts     │       │   .ts     ││
-│                   └───────────┘          └───────────┘       └───────────┘│
-│                          └───────────────────────┬───────────────────┘     │
-│                                                  ▼                         │
-│                                      ClientApp/generated/                  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ STEP 2: DEV SERVERS                                                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────┐      ┌─────────────────────────────┐       │
-│  │      KESTREL (.NET)         │      │      VITE (Bun)             │       │
-│  │      localhost:5000         │      │      localhost:5173         │       │
-│  │                             │      │                             │       │
-│  │  • Impulse routes           │      │  • React app                │       │
-│  │  • Server-driven props      │      │  • HMR WebSocket            │       │
-│  │  • Content negotiation      │      │  • Watches *.tsx            │       │
-│  │  • X-Impulse header check   │      │  • Watches generated/       │       │
-│  └─────────────────────────────┘      └─────────────────────────────┘       │
-│              │                                    │                          │
-│              └────────────────┬───────────────────┘                          │
-│                               ▼                                              │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │                         BROWSER                                         ││
-│  │                      localhost:5173                                     ││
-│  │                                                                         ││
-│  │   React App ◄───── HMR WebSocket ────► Vite                            ││
-│  │       │                                                                 ││
-│  │       │ context.impulseFetch(Routes.residentDetail(1))                 ││
-│  │       │ (X-Impulse: 1 header)                                          ││
-│  │       │                                                                 ││
-│  │       └────────► Vite Proxy ────────► Kestrel ────────► JSON           ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ STEP 3: HOT RELOAD SCENARIOS                                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  SCENARIO A: Edit React Component (.tsx)                                     │
-│  ────────────────────────────────────────                                    │
-│  Save Detail.tsx → Vite HMR → Browser updates → ~50ms                       │
-│  State preserved ✓                                                           │
-│                                                                              │
-│  SCENARIO B: Edit C# Handler/Model                                           │
-│  ─────────────────────────────────────                                       │
-│  Save Handler.cs → dotnet watch → Roslyn recompile                          │
-│                  → Source Generator → TypeScript.g.cs                       │
-│                  → MSBuild Extract → generated/*.ts                         │
-│                  → Vite HMR → Browser updates → ~2s                         │
-│                                                                              │
-│  SCENARIO C: Edit FluentValidation Rule                                      │
-│  ──────────────────────────────────────                                      │
-│  Save Validator.cs → Roslyn → Source Gen → validation.ts                    │
-│  z.string().max(100) → z.string().max(200)                                  │
-│  Vite HMR → Client validation matches server                                 │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+dotnet publish -c Release
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ BUILD: Source gen → extract TS → bun run build                  │
+│        Output: dist/assets/index-[hash].js, manifest.json       │
+│        Copy to wwwroot/                                         │
+└─────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ RUNTIME: Kestrel only (single process)                          │
+│   /assets/* → static files (immutable cache)                    │
+│   /* → HTML with __IMPULSE_PROPS__ + hashed asset paths         │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 12. Production Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           dotnet publish -c Release                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ STEP 1: BUILD                                                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Roslyn + Source Generator → Routes.g.cs, TypeScript.g.cs                   │
-│                │                                                             │
-│                ▼                                                             │
-│  MSBuild Extract → ClientApp/generated/*.ts                                 │
-│                │                                                             │
-│                ▼                                                             │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │                         bun run build                                  │ │
-│  │                    (Vite production build)                             │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                │                                                             │
-│                ▼                                                             │
-│  ClientApp/dist/                                                             │
-│  ├── assets/                                                                 │
-│  │   ├── index-a1b2c3d4.js       (content hash, tree-shaken, minified)      │
-│  │   ├── index-e5f6g7h8.css      (content hash)                             │
-│  │   └── chunk-vendor-xyz123.js  (code split)                               │
-│  └── .vite/                                                                  │
-│      └── manifest.json            (maps source → hashed files)              │
-│                │                                                             │
-│                ▼                                                             │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │                    MSBuild Copy to wwwroot                             │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                │                                                             │
-│                ▼                                                             │
-│  publish/                                                                    │
-│  ├── MyApp.dll                                                               │
-│  ├── appsettings.json                                                        │
-│  └── wwwroot/                                                                │
-│      └── assets/                                                             │
-│          ├── index-a1b2c3d4.js                                               │
-│          ├── index-e5f6g7h8.css                                              │
-│          └── .vite/manifest.json                                             │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ STEP 2: PRODUCTION RUNTIME                                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │                         KESTREL (single process)                        ││
-│  │                                                                         ││
-│  │  Request ──► UseStaticFiles ──► UseImpulse ──► Endpoints               ││
-│  │                    │                 │                                  ││
-│  │                    ▼                 ▼                                  ││
-│  │            /assets/*.js        / or /residents/*                        ││
-│  │            (immutable cache)   (no extension)                           ││
-│  │                    │                 │                                  ││
-│  │                    ▼                 ▼                                  ││
-│  │            wwwroot/assets/     AssetManifest reads manifest.json        ││
-│  │            Cache-Control:      Returns HTML with hashed paths:          ││
-│  │            max-age=31536000    <script src="/assets/index-a1b2c3d4.js"> ││
-│  │            immutable                                                    ││
-│  └─────────────────────────────────────────────────────────────────────────┘│
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ STEP 3: BROWSER REQUEST                                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Browser: GET /residents/123                                                 │
-│         │                                                                    │
-│         ▼                                                                    │
-│  Kestrel: No static file → UseImpulse middleware                            │
-│         │                                                                    │
-│         ▼                                                                    │
-│  AssetManifest reads .vite/manifest.json                                    │
-│  Returns HTML:                                                               │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │ <!DOCTYPE html>                                                        │ │
-│  │ <html>                                                                 │ │
-│  │   <head>                                                               │ │
-│  │     <link rel="stylesheet" href="/assets/index-e5f6g7h8.css">         │ │
-│  │   </head>                                                              │ │
-│  │   <body>                                                               │ │
-│  │     <div id="root"></div>                                              │ │
-│  │     <script id="__IMPULSE_PROPS__">{"resident":{...}}</script>        │ │
-│  │     <script type="module" src="/assets/index-a1b2c3d4.js"></script>   │ │
-│  │   </body>                                                              │ │
-│  │ </html>                                                                │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│         │                                                                    │
-│         ▼                                                                    │
-│  Browser loads JS (cached forever due to content hash)                      │
-│  React hydrates with embedded __IMPULSE_PROPS__                             │
-│  NO additional fetch needed for initial data                                │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 13. Dev vs Prod Comparison
-
-| Aspect | Development | Production |
-|--------|-------------|------------|
-| **Servers** | 2 (Kestrel + Vite) | 1 (Kestrel only) |
-| **Assets** | Served by Vite (unbundled) | Served by Kestrel (bundled, hashed) |
-| **JS Files** | Individual modules | Single bundle + code-split chunks |
-| **CSS** | Individual files with HMR | Single hashed file |
-| **Caching** | No cache (always fresh) | Immutable (max-age=31536000) |
-| **Source Maps** | Full (for debugging) | Optional (smaller) |
-| **Startup** | ~2s (both servers) | ~200ms (Kestrel only) |
-| **TypeScript** | tsgo watch mode | tsgo production build |
-
----
-
-## 14. MSBuild Integration
-
-```xml
-<!-- Impulse.Sdk.targets (ships with NuGet package) -->
-<Project>
-  <!-- Auto bun install -->
-  <Target Name="ImpulseRestoreNpm" BeforeTargets="Build"
-          Condition="!Exists('$(MSBuildProjectDirectory)/ClientApp/node_modules')">
-    <Exec Command="bun install" WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp" />
-  </Target>
-
-  <!-- Extract TS from TypeScript.g.cs -->
-  <Target Name="ImpulseExtractTS" AfterTargets="Build">
-    <ImpulseExtractTask
-      SourceFile="$(IntermediateOutputPath)TypeScript.g.cs"
-      OutputDir="$(MSBuildProjectDirectory)/ClientApp/generated" />
-  </Target>
-
-  <!-- Start Vite in dev -->
-  <Target Name="ImpulseStartVite" BeforeTargets="Run"
-          Condition="'$(ASPNETCORE_ENVIRONMENT)' == 'Development'">
-    <Exec Command="bun run dev" WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp"
-          ContinueOnError="true" />
-  </Target>
-
-  <!-- Build client for publish -->
-  <Target Name="ImpulseBuildClient" BeforeTargets="Publish">
-    <Exec Command="bun run build" WorkingDirectory="$(MSBuildProjectDirectory)/ClientApp" />
-  </Target>
-
-  <!-- Copy to wwwroot -->
-  <Target Name="ImpulseCopyAssets" AfterTargets="ImpulseBuildClient">
-    <ItemGroup>
-      <ClientAssets Include="$(MSBuildProjectDirectory)/ClientApp/dist/**/*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(ClientAssets)"
-          DestinationFolder="$(PublishDir)wwwroot/%(RecursiveDir)" />
-  </Target>
-</Project>
-```
-
----
-
-## 15. Developer Experience
+## 9. Developer Experience
 
 ```bash
-dotnet new impulse -n MyApp
-cd MyApp
-dotnet run
-# → Browser opens at localhost:5173 (Vite dev server)
-# → Vite proxies to Kestrel at localhost:5000
-# → Working CRUD app with React + .NET
-# → Edit C# → recompile + regenerate → HMR (~2s)
-# → Edit .tsx → Vite HMR (~50ms)
-# → Everything just works
+dotnet new impulse -n MyApp && cd MyApp && dotnet run
+# Browser opens, working app, HMR enabled
 ```
 
-**What users DON'T need to do:**
-- ❌ Run `bun install` manually
-- ❌ Start Vite in separate terminal
-- ❌ Run code generators
-- ❌ Configure proxy
-- ❌ Set up hot reload
-- ❌ Configure TypeScript paths
-- ❌ Worry about hashed assets
-
-**Everything automated by MSBuild + runtime.**
+**Automated:** bun install, vite dev server, code generation, proxy config, hashed assets
 
 ---
 
-## 16. NuGet Packages
+## 10. NuGet Structure
 
 ```
-Impulse.Core            → ImpulseAttribute, extension methods
-Impulse.SourceGenerator → Roslyn generator (Routes.g.cs, TypeScript.g.cs)
-Impulse.MSBuild         → TS extraction task, targets
-Impulse.Runtime         → AssetManifest, middleware, dev proxy
-Impulse.Templates       → dotnet new impulse
-
-Impulse (meta-package)  → References all above
+Impulse                 → Meta-package (references all below)
+├── Impulse.Core        → Attributes, extensions
+├── Impulse.SourceGen   → Roslyn generator
+├── Impulse.MSBuild     → TS extraction task
+├── Impulse.Runtime     → Middleware, asset manifest
+└── Impulse.Templates   → dotnet new impulse
 ```
-
-**Usage:**
-```xml
-<PackageReference Include="Impulse" Version="1.0.0" />
-```
-
----
-
-## 17. Key Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Server-driven, not API-first | Same URL for HTML and JSON, server controls UI |
-| Router context, not imports | Dependency injection, extensibility, testability |
-| `router.invalidate()` | TanStack Router's built-in cache invalidation |
-| 4 generated files | Simple, no unnecessary abstraction |
-| Embedded TS in .cs | Source generator limitation, MSBuild extracts |
-| No type registration | Routes generated from C#, typos impossible |
-| RoutePaths + Routes | Single source of truth, path builders derive |
