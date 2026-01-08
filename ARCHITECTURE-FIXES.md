@@ -1,19 +1,29 @@
 # Impulse v2 - Architecture Fixes
 
+## Simplified Generated Structure
+
+**4 files. That's it.**
+
+```
+generated/
+├── types.ts       # All interfaces (props, requests, responses, loader data)
+├── validation.ts  # All Zod schemas (from FluentValidation)
+├── mutations.ts   # All mutation hooks (POST/PUT/DELETE)
+└── routeTree.ts   # Routes + router + type registration
+```
+
+---
+
 ## Fix 1: App Shell with Mount Code
 
-**Problem:** No spec for how React app bootstraps and uses generated code.
-
-**Solution:** Template provides shell, generated code plugs in.
-
-### Template Provides (user can customize):
+**Template provides:**
 
 ```tsx
 // ClientApp/src/main.tsx
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from '@tanstack/react-router'
-import { router } from '@impulse/generated/router'
+import { router } from '@impulse/generated/routeTree'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -23,7 +33,7 @@ createRoot(document.getElementById('root')!).render(
 ```
 
 ```tsx
-// ClientApp/src/App.tsx (root layout)
+// ClientApp/src/App.tsx (root layout - user customizes)
 import { Outlet } from '@tanstack/react-router'
 
 export function App() {
@@ -31,27 +41,10 @@ export function App() {
     <div className="app">
       <header>My App</header>
       <main>
-        <Outlet />  {/* Routes render here */}
+        <Outlet />
       </main>
     </div>
   )
-}
-```
-
-### Generated Code Provides:
-
-```tsx
-// ClientApp/generated/router.ts
-import { createRouter } from '@tanstack/react-router'
-import { routeTree } from './routeTree'
-
-export const router = createRouter({ routeTree })
-
-// Type registration for type-safe navigation
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
-  }
 }
 ```
 
@@ -63,37 +56,11 @@ declare module '@tanstack/react-router' {
 
 **Solution:** Use `Mutations` namespace with clear separation.
 
-### Generated Structure:
+### Why "Mutations" not "Forms":
 
-```
-ClientApp/generated/
-├── types/                    # All TypeScript types
-│   ├── ResidentSummary.ts
-│   ├── ResidentDetailProps.ts
-│   ├── CreateResidentRequest.ts
-│   ├── CreateResidentResponse.ts
-│   └── index.ts
-│
-├── loaders/                  # GET endpoint loader data
-│   ├── ResidentDetail.ts     # Loader return type
-│   └── index.ts
-│
-├── mutations/                # POST/PUT/DELETE operations
-│   ├── useCreateResident.ts
-│   ├── useUpdateResident.ts
-│   ├── useDeleteResident.ts
-│   └── index.ts
-│
-├── validation/               # Zod schemas (from FluentValidation)
-│   ├── CreateResidentSchema.ts
-│   ├── UpdateResidentSchema.ts
-│   └── index.ts
-│
-├── routes/                   # TanStack virtual route config
-│   └── routeTree.ts          # Virtual file routes definition
-│
-└── router.ts                 # Router instance + type registration
-```
+- `<form>` is an HTML element
+- `useCreateResident()` is a mutation (data change)
+- No naming collision
 
 ### Usage (no collision):
 
@@ -160,79 +127,55 @@ interface MutationResult<TReq, TRes> {
 
 ---
 
-## Fix 3: GET Types (Loader Data)
+## Fix 3: GET Types (Loader Data in types.ts)
 
-**Problem:** Only mutation types specified. GET endpoints need loader types too.
-
-**Solution:** Generate `LoaderData` types that include deferred fields.
-
-### For Simple GET:
-
-```csharp
-// C# endpoint
-app.MapGet("/residents/{id}", handler)
-   .Impulse<ResidentDetailProps>();
-```
+**All types in one file - including loader data types:**
 
 ```typescript
-// generated/loaders/ResidentDetail.ts
-import type { ResidentDetailProps } from '../types'
+// generated/types.ts
 
-// Simple loader - props are the data
-export type ResidentDetailLoaderData = ResidentDetailProps
-```
-
-### For GET with Deferred:
-
-```csharp
-// C# endpoint with deferred data
-app.MapGet("/residents/{id}", handler)
-   .Impulse<ResidentDetailProps>()
-   .Deferred<MedicationList>("medications", "/api/residents/{id}/meds")
-   .Deferred<AppointmentList>("appointments", "/api/residents/{id}/appointments");
-```
-
-```typescript
-// generated/loaders/ResidentDetail.ts
-import type { Deferred } from '@impulse/react'
-import type { ResidentDetailProps, MedicationList, AppointmentList } from '../types'
-
-// Loader data includes deferred fields
-export interface ResidentDetailLoaderData {
-  // Sync data (awaited in loader)
-  props: ResidentDetailProps
-
-  // Deferred data (streamed after initial render)
-  medications: Deferred<MedicationList>
-  appointments: Deferred<AppointmentList>
+// Props types (from .Impulse<T>())
+export interface ResidentDetailProps {
+  resident: ResidentSummary;
+  createdAt: string;
 }
+
+// Request/Response types (from mutations)
+export interface CreateResidentRequest {
+  name: string;
+  email: string;
+}
+
+export interface CreateResidentResponse {
+  id: number;
+}
+
+// Loader data types (with Deferred for streaming)
+export interface ResidentDetailLoaderData {
+  props: ResidentDetailProps;
+  medications: Deferred<MedicationList>;  // Streamed
+  appointments: Deferred<AppointmentList>; // Streamed
+}
+
+// Deferred type (re-exported from TanStack)
+export type Deferred<T> = Promise<T>
 ```
 
-### Component Usage:
+**Component usage:**
 
 ```tsx
-// Features/Residents/Detail.tsx
 import { useLoaderData, Await } from '@tanstack/react-router'
-import type { ResidentDetailLoaderData } from '@impulse/generated/loaders'
+import type { ResidentDetailLoaderData } from '@impulse/generated/types'
 
 export function ResidentDetail() {
-  const { props, medications, appointments } = useLoaderData<ResidentDetailLoaderData>()
+  const { props, medications } = useLoaderData<ResidentDetailLoaderData>()
 
   return (
     <div>
-      {/* Sync data - available immediately */}
       <h1>{props.resident.name}</h1>
-
-      {/* Deferred data - streams in */}
       <Suspense fallback={<Spinner />}>
         <Await promise={medications}>
           {(meds) => <MedicationList items={meds} />}
-        </Await>
-      </Suspense>
-
-      <Suspense fallback={<Spinner />}>
-        <Await promise={appointments}>
-          {(appts) => <AppointmentList items={appts} />}
         </Await>
       </Suspense>
     </div>
@@ -251,7 +194,7 @@ export function ResidentDetail() {
 ### What We Generate:
 
 ```typescript
-// generated/routes/routeTree.ts
+// generated/routeTree.ts
 import {
   createRootRoute,
   createRoute,
@@ -259,8 +202,8 @@ import {
   defer
 } from '@tanstack/react-router'
 
-import { App } from '../../src/App'
-import type { ResidentDetailLoaderData } from '../loaders'
+import { App } from '../src/App'
+import type { ResidentDetailLoaderData } from './types'
 
 // Root route (app shell)
 const rootRoute = createRootRoute({
@@ -303,6 +246,16 @@ export const routeTree = rootRoute.addChildren([
   residentsIndexRoute,
   residentDetailRoute,
 ])
+
+// Router instance (exported for main.tsx)
+export const router = createRouter({ routeTree })
+
+// Type registration (enables type-safe navigation)
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router
+  }
+}
 ```
 
 ### No TanStack Plugin Needed:
@@ -338,85 +291,92 @@ export default defineConfig({
 
 ---
 
-## Fix 5: Updated Generated Structure
+## Final Generated Structure (4 Files)
 
 ```
 ClientApp/
-├── src/                          # User code
-│   ├── main.tsx                  # Entry point (template)
-│   ├── App.tsx                   # Root layout (user customizes)
-│   └── Features/                 # Vertical slices
+├── src/                          # User code (template provides)
+│   ├── main.tsx                  # Entry: imports router, renders RouterProvider
+│   ├── App.tsx                   # Root layout with <Outlet />
+│   └── Features/                 # Vertical slices (user writes)
 │       └── Residents/
 │           ├── List.tsx
 │           ├── Detail.tsx
 │           └── Create.tsx
 │
-└── generated/                    # All generated code
-    ├── types/                    # TypeScript interfaces
-    │   ├── index.ts              # Re-exports all
-    │   └── *.ts                  # One per type
-    │
-    ├── loaders/                  # GET endpoint data types
-    │   ├── index.ts
-    │   └── *.ts                  # Includes Deferred<T>
-    │
-    ├── mutations/                # POST/PUT/DELETE hooks
-    │   ├── index.ts
-    │   └── use*.ts               # useCreateX, useUpdateX
-    │
-    ├── validation/               # Zod schemas
-    │   ├── index.ts
-    │   └── *Schema.ts            # From FluentValidation
-    │
-    ├── routes/
-    │   └── routeTree.ts          # Virtual route definitions
-    │
-    └── router.ts                 # Router instance + types
+└── generated/                    # ALL GENERATED (4 files)
+    ├── types.ts                  # All interfaces (props, requests, loader data)
+    ├── validation.ts             # All Zod schemas
+    ├── mutations.ts              # All mutation hooks
+    └── routeTree.ts              # Routes + router + type registration
 ```
+
+**That's it. 4 files.**
 
 ---
 
-## Updated TypeScript.g.cs Structure
+## TypeScript.g.cs (Simplified)
 
 ```csharp
-// TypeScript.g.cs (generated by Roslyn)
+// TypeScript.g.cs (generated by Roslyn Source Generator)
 public static partial class TypeScriptOutput
 {
-    // Types
+    // 1. All types in one file
     public const string Types = """
-    /* IMPULSE:types/index.ts */
-    export * from './ResidentSummary'
-    export * from './ResidentDetailProps'
-    export * from './CreateResidentRequest'
-    /* END:types/index.ts */
-
-    /* IMPULSE:types/ResidentSummary.ts */
+    /* IMPULSE:types.ts */
+    // Props types
     export interface ResidentSummary {
       id: number;
       name: string;
     }
-    /* END:types/ResidentSummary.ts */
-    """;
 
-    // Loaders (GET data with Deferred)
-    public const string Loaders = """
-    /* IMPULSE:loaders/ResidentDetail.ts */
-    import type { Deferred } from '@impulse/react'
-    import type { ResidentDetailProps, MedicationList } from '../types'
+    export interface ResidentDetailProps {
+      resident: ResidentSummary;
+      createdAt: string;
+    }
+
+    // Request/Response types
+    export interface CreateResidentRequest {
+      name: string;
+      email: string;
+    }
+
+    export interface CreateResidentResponse {
+      id: number;
+    }
+
+    // Loader data types (includes Deferred)
+    export type Deferred<T> = Promise<T>
 
     export interface ResidentDetailLoaderData {
       props: ResidentDetailProps;
       medications: Deferred<MedicationList>;
     }
-    /* END:loaders/ResidentDetail.ts */
+    /* END:types.ts */
     """;
 
-    // Mutations (POST/PUT/DELETE)
+    // 2. All validation schemas in one file
+    public const string Validation = """
+    /* IMPULSE:validation.ts */
+    import { z } from 'zod'
+
+    export const CreateResidentSchema = z.object({
+      name: z.string().min(1).max(100),
+      email: z.string().min(1).email(),
+    })
+
+    export const UpdateResidentSchema = z.object({
+      name: z.string().min(1).max(100),
+    })
+    /* END:validation.ts */
+    """;
+
+    // 3. All mutation hooks in one file
     public const string Mutations = """
-    /* IMPULSE:mutations/useCreateResident.ts */
+    /* IMPULSE:mutations.ts */
     import { useImpulseMutation } from '@impulse/react'
-    import { CreateResidentSchema } from '../validation/CreateResidentSchema'
-    import type { CreateResidentRequest, CreateResidentResponse } from '../types'
+    import { CreateResidentSchema, UpdateResidentSchema } from './validation'
+    import type { CreateResidentRequest, CreateResidentResponse } from './types'
 
     export function useCreateResident() {
       return useImpulseMutation<CreateResidentRequest, CreateResidentResponse>({
@@ -425,31 +385,34 @@ public static partial class TypeScriptOutput
         schema: CreateResidentSchema,
       })
     }
-    /* END:mutations/useCreateResident.ts */
+
+    export function useUpdateResident(id: number) {
+      return useImpulseMutation({
+        endpoint: `/api/residents/${id}`,
+        method: 'PUT',
+        schema: UpdateResidentSchema,
+      })
+    }
+    /* END:mutations.ts */
     """;
 
-    // Validation (Zod from FluentValidation)
-    public const string Validation = """
-    /* IMPULSE:validation/CreateResidentSchema.ts */
-    import { z } from 'zod'
-
-    export const CreateResidentSchema = z.object({
-      name: z.string().min(1).max(100),
-      email: z.string().min(1).email(),
-    })
-
-    export type CreateResidentInput = z.infer<typeof CreateResidentSchema>
-    /* END:validation/CreateResidentSchema.ts */
-    """;
-
-    // Routes (TanStack Virtual)
-    public const string Routes = """
-    /* IMPULSE:routes/routeTree.ts */
-    import { createRootRoute, createRoute, defer } from '@tanstack/react-router'
-    import { App } from '../../src/App'
-    import type { ResidentDetailLoaderData } from '../loaders/ResidentDetail'
+    // 4. Route tree + router (all in one file)
+    public const string RouteTree = """
+    /* IMPULSE:routeTree.ts */
+    import { createRootRoute, createRoute, createRouter, defer } from '@tanstack/react-router'
+    import { App } from '../src/App'
+    import type { ResidentDetailLoaderData } from './types'
 
     const rootRoute = createRootRoute({ component: App })
+
+    const residentsRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/residents',
+      loader: async () => {
+        return fetch('/api/residents').then(r => r.json())
+      },
+      component: () => import('@features/Residents/List'),
+    })
 
     const residentDetailRoute = createRoute({
       getParentRoute: () => rootRoute,
@@ -464,24 +427,21 @@ public static partial class TypeScriptOutput
       component: () => import('@features/Residents/Detail'),
     })
 
-    export const routeTree = rootRoute.addChildren([residentDetailRoute])
-    /* END:routes/routeTree.ts */
-    """;
+    export const routeTree = rootRoute.addChildren([
+      residentsRoute,
+      residentDetailRoute,
+    ])
 
     // Router instance
-    public const string Router = """
-    /* IMPULSE:router.ts */
-    import { createRouter } from '@tanstack/react-router'
-    import { routeTree } from './routes/routeTree'
-
     export const router = createRouter({ routeTree })
 
+    // Type registration
     declare module '@tanstack/react-router' {
       interface Register {
         router: typeof router
       }
     }
-    /* END:router.ts */
+    /* END:routeTree.ts */
     """;
 }
 ```
