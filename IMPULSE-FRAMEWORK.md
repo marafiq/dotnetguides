@@ -605,7 +605,160 @@ dotnet test --filter "Category=E2E"
 
 ---
 
-## 8. NuGet Package Structure
+## 8. Stable Build System
+
+**No manual steps. No cat commands. No editing generated code. Ever.**
+
+The build system must be fully automated and reproducible:
+
+### Single Command Operations
+
+```bash
+dotnet restore    # Restores everything (NuGet + npm)
+dotnet build      # Compiles + generates + extracts
+dotnet test       # Runs ALL tests (unit + integration + E2E)
+dotnet run        # Full dev environment
+dotnet publish    # Production-ready output
+```
+
+### Build Pipeline (Automated)
+
+```
+dotnet restore
+    │
+    ├── NuGet restore (Impulse.* packages)
+    │
+    └── MSBuild target: RestoreNpm
+        └── bun install (package.json dependencies)
+
+dotnet build
+    │
+    ├── Roslyn compile
+    │   └── Source generator runs
+    │       ├── Routes.g.cs (C# constants)
+    │       └── TypeScript.g.cs (embedded TS)
+    │
+    └── MSBuild target: ExtractTypeScript
+        └── Extracts to generated/*.ts
+            ├── types.ts
+            ├── validation.ts
+            ├── mutations.ts
+            └── routeTree.ts
+
+dotnet test
+    │
+    ├── xUnit tests (C#)
+    │
+    ├── MSBuild target: RunTypeScriptTests
+    │   └── bun test
+    │
+    └── MSBuild target: RunE2ETests
+        └── bunx playwright test
+
+dotnet publish -c Release
+    │
+    ├── Release build (above steps)
+    │
+    ├── MSBuild target: BundleTypeScript
+    │   └── bun run build
+    │       └── Vite outputs dist/
+    │
+    └── MSBuild target: CopyAssets
+        └── Copies dist/ to wwwroot/
+```
+
+### MSBuild Integration
+
+```xml
+<!-- Impulse.MSBuild provides these targets -->
+<Project>
+  <!-- Auto-restore npm on NuGet restore -->
+  <Target Name="RestoreNpm" AfterTargets="Restore">
+    <Exec Command="bun install" WorkingDirectory="$(ProjectDir)" />
+  </Target>
+
+  <!-- Extract TS after build -->
+  <Target Name="ExtractTypeScript" AfterTargets="Build">
+    <ImpulseExtractTypeScript
+      SourceFile="$(IntermediateOutputPath)TypeScript.g.cs"
+      OutputDirectory="$(ProjectDir)generated" />
+  </Target>
+
+  <!-- Run TS tests with dotnet test -->
+  <Target Name="RunTypeScriptTests" AfterTargets="Test">
+    <Exec Command="bun test" WorkingDirectory="$(ProjectDir)" />
+  </Target>
+
+  <!-- Run E2E tests -->
+  <Target Name="RunE2ETests" AfterTargets="RunTypeScriptTests">
+    <Exec Command="bunx playwright test" WorkingDirectory="$(ProjectDir)" />
+  </Target>
+
+  <!-- Bundle for publish -->
+  <Target Name="BundleTypeScript" BeforeTargets="Publish">
+    <Exec Command="bun run build" WorkingDirectory="$(ProjectDir)" />
+  </Target>
+
+  <!-- Copy bundled assets -->
+  <Target Name="CopyAssets" AfterTargets="BundleTypeScript">
+    <ItemGroup>
+      <DistFiles Include="$(ProjectDir)dist\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DistFiles)" DestinationFolder="$(PublishDir)wwwroot" />
+  </Target>
+</Project>
+```
+
+### What This Guarantees
+
+| Command | Result |
+|---------|--------|
+| `dotnet restore` | Fresh clone → working state |
+| `dotnet build` | All generated files current |
+| `dotnet test` | All tests run (C# + TS + E2E) |
+| `dotnet run` | Full dev environment running |
+| `dotnet publish` | Deployable folder ready |
+
+### Never Do This
+
+```bash
+# ❌ NEVER manually copy files
+cp something somewhere
+
+# ❌ NEVER cat/echo to create files
+cat > file.ts << 'EOF'
+
+# ❌ NEVER edit generated/ folder
+vim generated/types.ts
+
+# ❌ NEVER run npm/bun manually for build steps
+bun install  # (dotnet restore does this)
+bun run build  # (dotnet publish does this)
+```
+
+### CI/CD Example
+
+```yaml
+# GitHub Actions - single dotnet command does everything
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+      - uses: oven-sh/setup-bun@v1
+
+      - run: dotnet restore
+      - run: dotnet build --no-restore
+      - run: dotnet test --no-build
+      - run: dotnet publish -c Release --no-build
+```
+
+**The system is stable because it's automated. Manual steps introduce drift.**
+
+---
+
+## 9. NuGet Package Structure
 
 ```
 Impulse                     → Meta-package
@@ -618,7 +771,7 @@ Impulse                     → Meta-package
 
 ---
 
-## 9. Type Mappings (Reference)
+## 10. Type Mappings (Reference)
 
 ### C# → TypeScript
 
@@ -641,7 +794,7 @@ Impulse                     → Meta-package
 
 ---
 
-## 10. Implementation Files
+## 11. Implementation Files
 
 Each file has a corresponding test file:
 
@@ -668,7 +821,7 @@ src/
 
 ---
 
-## 11. Development Workflow
+## 12. Development Workflow
 
 ```bash
 # 1. Create test file first
@@ -689,7 +842,7 @@ dotnet test  # Still GREEN
 
 ---
 
-## 12. Quality Gates
+## 13. Quality Gates
 
 Before any PR:
 

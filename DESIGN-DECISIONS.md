@@ -8,7 +8,36 @@ This document captures the reasoning behind key architectural decisions, based o
 
 ---
 
-## 0. Test-Driven Development as Core Pillar
+## 0. Repeatable Build Loop FIRST
+
+**Decision:** Establish and prove the build loop works before writing any code.
+
+**The order matters:**
+1. Create project structure (template)
+2. Set up build targets (MSBuild)
+3. Prove the loop works: `dotnet restore && dotnet build && dotnet test`
+4. THEN start writing code
+
+**Why this is point zero:**
+- If you can't build, you can't test
+- If you can't test, you can't verify TDD
+- If you can't verify, you're guessing
+- Manual steps break CI/CD
+
+**Proof of working loop:**
+```bash
+# Fresh clone must work
+git clone repo && cd repo
+dotnet restore   # ✓ All dependencies
+dotnet build     # ✓ Compiles, generates
+dotnet test      # ✓ All tests pass (even if zero tests)
+```
+
+**Never write code until this passes.** The loop is the foundation everything else depends on.
+
+---
+
+## 1. Test-Driven Development
 
 **Decision:** TDD is not optional. Every function starts with a failing test.
 
@@ -78,7 +107,46 @@ REFACTOR: Improve with confidence → Tests guard correctness
 
 ---
 
-## 1. Server-Driven vs API-First
+## 2. Stable Automated Build System
+
+**Decision:** Single dotnet commands handle everything. No manual steps.
+
+**Reasoning:**
+- Manual steps introduce drift and errors
+- "Copy this file" instructions get outdated
+- Cat/echo commands create unmaintainable scripts
+- Editing generated code means it gets overwritten
+
+**What dotnet commands do:**
+
+| Command | Automates |
+|---------|-----------|
+| `dotnet restore` | NuGet + bun install |
+| `dotnet build` | Compile + source gen + TS extraction |
+| `dotnet test` | xUnit + bun test + playwright |
+| `dotnet run` | Build + start Kestrel + start Vite |
+| `dotnet publish` | Build + bundle + copy assets |
+
+**Why MSBuild integration:**
+- Industry-standard build system
+- Works in all .NET tooling (VS, Rider, CLI)
+- CI/CD systems understand it natively
+- Targets chain correctly (restore before build, build before test)
+
+**Never do:**
+- `cp` or `cat` to create/copy files
+- Edit anything in `generated/` folder
+- Run `bun install` or `bun build` manually
+- Write shell scripts for build steps
+
+**Implementation:**
+- Impulse.MSBuild package provides all targets
+- Targets hook into standard MSBuild events (AfterTargets, BeforeTargets)
+- Single package reference enables full automation
+
+---
+
+## 3. Server-Driven vs API-First
 
 **Decision:** Same URL returns HTML or JSON based on `X-Impulse` header.
 
@@ -95,7 +163,7 @@ REFACTOR: Improve with confidence → Tests guard correctness
 
 ---
 
-## 2. Zero Magic Strings
+## 4. Zero Magic Strings
 
 **Decision:** All paths derive from generated `RoutePaths` constants.
 
@@ -133,7 +201,7 @@ The `replace` approach is slightly more verbose but ensures the path comes from 
 
 ---
 
-## 3. Router Context for DI
+## 5. Router Context for DI
 
 **Decision:** Use `createRootRouteWithContext<ImpulseContext>()` instead of module imports.
 
@@ -157,7 +225,7 @@ const rootRoute = createRootRouteWithContext<ImpulseContext>()({...})
 
 ---
 
-## 4. Router Type Registration
+## 6. Router Type Registration
 
 **Decision:** Register router type globally for full type safety.
 
@@ -177,7 +245,7 @@ declare module '@tanstack/react-router' {
 
 ---
 
-## 5. Invalidation via router.invalidate()
+## 7. Invalidation via router.invalidate()
 
 **Decision:** Mutations call `router.invalidate()` in `onSuccess` callback.
 
@@ -198,7 +266,7 @@ onSuccess: () => router.invalidate({ sync: true })
 
 ---
 
-## 6. Typed Loaders with Generic Parameter
+## 8. Typed Loaders with Generic Parameter
 
 **Decision:** Loaders specify return type via generic: `impulseFetch<ResidentListProps>(url)`
 
@@ -214,7 +282,7 @@ loader: ({ context }) => context.impulseFetch<ResidentListProps>(RoutePaths.resi
 
 ---
 
-## 7. useImpulseMutation in Template (Not Generated)
+## 9. useImpulseMutation in Template (Not Generated)
 
 **Decision:** `useImpulseMutation` hook lives in template static file, not generated code.
 
@@ -231,7 +299,7 @@ loader: ({ context }) => context.impulseFetch<ResidentListProps>(RoutePaths.resi
 
 ---
 
-## 8. react-hook-form Integration
+## 10. react-hook-form Integration
 
 **Decision:** `useImpulseMutation` wraps react-hook-form internally.
 
@@ -254,7 +322,7 @@ return { register: form.register, errors: form.formState.errors, submit, isSubmi
 
 ---
 
-## 9. Vite Proxy Configuration
+## 11. Vite Proxy Configuration
 
 **Decision:** Vite dev server proxies non-asset requests to Kestrel.
 
@@ -280,7 +348,7 @@ This regex proxies everything except Vite's own dev assets.
 
 ---
 
-## 10. getRouteApi for Code-Split Components
+## 12. getRouteApi for Code-Split Components
 
 **Decision:** Use `getRouteApi` pattern for typed loader data in lazy components.
 
@@ -300,7 +368,7 @@ const data = route.useLoaderData()  // Typed!
 
 ---
 
-## 11. C# Routes Class Generation
+## 13. C# Routes Class Generation
 
 **Decision:** Generate `Routes.g.cs` with nested classes mirroring route structure.
 
@@ -322,7 +390,7 @@ public static class Routes {
 
 ---
 
-## 12. 4 Generated Files Only
+## 14. 4 Generated Files Only
 
 **Decision:** Generate exactly 4 TypeScript files: types.ts, validation.ts, mutations.ts, routeTree.ts
 

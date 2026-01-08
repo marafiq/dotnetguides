@@ -21,6 +21,16 @@ dotnet run
 # Browser opens at localhost:5173, HMR enabled
 ```
 
+**Everything is automated.** No manual file copying, no cat commands, no editing generated code. Ever.
+
+```bash
+dotnet restore    # Restores NuGet + runs bun install
+dotnet build      # Compiles C# + generates TypeScript
+dotnet test       # Runs all tests (C# + TS + E2E)
+dotnet run        # Builds + starts servers + opens browser
+dotnet publish    # Builds + bundles + outputs deployable folder
+```
+
 ---
 
 ## 2. Project Structure
