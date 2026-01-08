@@ -9,11 +9,11 @@ Minimal API Code
        ↓
   ImpulseModel    ← Single source of truth
        ↓
-   ┌───┴────┬─────────┬──────────┐
-   ↓        ↓         ↓          ↓
-TypesGen  RoutesGen  ZodGen  RegistryGen
-   ↓        ↓         ↓          ↓
-types.ts routes.ts  zod.ts  registry.ts
+   ┌───┴────┬─────────┐
+   ↓        ↓         ↓
+TypesGen  RoutesGen  ZodGen
+   ↓        ↓         ↓
+types.ts routes.ts  zod.ts
 ```
 
 ---
@@ -202,25 +202,6 @@ export const createRequestSchema = z.object({
 export type CreateRequest = z.infer<typeof createRequestSchema>;
 ```
 
-### RegistryGenerator
-
-```
-RegistryGenerator.Emit(model)
-  ✓ emits component path → import mapping
-  ✓ uses lazy imports for tree-shaking
-```
-
-**Output:**
-```typescript
-export const loadComponent = (path: string) => {
-  switch (path) {
-    case './Residents/List': return import('./Residents/List');
-    case './Residents/Detail': return import('./Residents/Detail');
-    default: throw new Error(`Unknown: ${path}`);
-  }
-};
-```
-
 ---
 
 ## 3. Function Signatures
@@ -234,7 +215,6 @@ static ImpulseModel Build(IEnumerable<EndpointInfo> endpoints);
 static string GenerateTypes(ImpulseModel model);
 static string GenerateRoutes(ImpulseModel model);
 static string GenerateZod(ImpulseModel model);
-static string GenerateRegistry(ImpulseModel model);
 ```
 
 ---
@@ -247,7 +227,6 @@ tests/Impulse.CodeGen.V2.Tests/
 ├── TypesGeneratorTests.cs   # ImpulseModel → types.ts
 ├── RoutesGeneratorTests.cs  # ImpulseModel → routes.ts
 ├── ZodGeneratorTests.cs     # ImpulseModel → zod.ts
-├── RegistryGeneratorTests.cs
 └── IntegrationTests.cs      # Full pipeline
 ```
 
