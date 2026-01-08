@@ -103,16 +103,25 @@ function CreatePage() {
 ### Mutation Hook Spec:
 
 ```typescript
-// generated/mutations/useCreateResident.ts
+// generated/mutations.ts
 import { useImpulseMutation } from '@impulse/react'
-import { CreateResidentSchema } from '../validation/CreateResidentSchema'
-import type { CreateResidentRequest, CreateResidentResponse } from '../types'
+import { CreateResidentSchema } from './validation'
+import { Routes } from './routeTree'  // Import generated routes
+import type { CreateResidentRequest, CreateResidentResponse } from './types'
 
 export function useCreateResident() {
   return useImpulseMutation<CreateResidentRequest, CreateResidentResponse>({
-    endpoint: '/residents',  // Same URL pattern - server-driven
+    endpoint: Routes.residents(),  // NO STRINGS - use generated constant
     method: 'POST',
-    schema: CreateResidentSchema,  // Client validation
+    schema: CreateResidentSchema,
+  })
+}
+
+export function useUpdateResident(id: number) {
+  return useImpulseMutation({
+    endpoint: Routes.residentDetail(id),  // NO STRINGS - use generated constant
+    method: 'PUT',
+    schema: UpdateResidentSchema,
   })
 }
 
@@ -257,50 +266,66 @@ import {
 import { App } from '../src/App'
 import type { ResidentDetailLoaderData } from './types'
 
-// Impulse fetch - same URL, JSON response for navigation
+// ============================================
+// ROUTE PATHS - Single source of truth (from C#)
+// ============================================
+export const RoutePaths = {
+  residents: '/residents',
+  residentDetail: '/residents/$id',
+  residentMedications: '/residents/$id/medications',
+  residentAppointments: '/residents/$id/appointments',
+} as const
+
+// Path builders - derive from RoutePaths, NO inline strings
+export const Routes = {
+  residents: () => RoutePaths.residents,
+  residentDetail: (id: number | string) =>
+    RoutePaths.residentDetail.replace('$id', String(id)),
+  residentMedications: (id: number | string) =>
+    RoutePaths.residentMedications.replace('$id', String(id)),
+  residentAppointments: (id: number | string) =>
+    RoutePaths.residentAppointments.replace('$id', String(id)),
+}
+
+// Impulse fetch helper
 const impulseFetch = (url: string) =>
   fetch(url, { headers: { 'X-Impulse': '1' } }).then(r => r.json())
 
-// Root route (app shell)
+// ============================================
+// ROUTE DEFINITIONS - Use RoutePaths, no strings
+// ============================================
 const rootRoute = createRootRoute({
   component: App,
 })
 
-// GET /residents (server-driven: same URL for HTML and JSON)
 const residentsIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/residents',
-  loader: () => impulseFetch('/residents'),
+  path: RoutePaths.residents,  // From constant
+  loader: () => impulseFetch(RoutePaths.residents),  // From constant
   component: () => import('@features/Residents/List'),
 })
 
-// GET /residents/$id (with deferred streams from server)
 const residentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/residents/$id',
+  path: RoutePaths.residentDetail,  // From constant
   loader: async ({ params }): Promise<ResidentDetailLoaderData> => {
-    const props = await impulseFetch(`/residents/${params.id}`)
+    const props = await impulseFetch(Routes.residentDetail(params.id))
 
     return {
       props,
-      // Deferred: Server streams these after initial response
-      medications: defer(impulseFetch(`/residents/${params.id}/medications`)),
-      appointments: defer(impulseFetch(`/residents/${params.id}/appointments`)),
+      medications: defer(impulseFetch(Routes.residentMedications(params.id))),
+      appointments: defer(impulseFetch(Routes.residentAppointments(params.id))),
     }
   },
   component: () => import('@features/Residents/Detail'),
 })
 
-// Route tree
 export const routeTree = rootRoute.addChildren([
   residentsIndexRoute,
   residentDetailRoute,
 ])
 
-// Router instance (exported for main.tsx)
 export const router = createRouter({ routeTree })
-
-// No type registration - routes generated from C#, typos impossible
 ```
 
 ### Server-Side (what .Impulse<T>() does):
@@ -443,16 +468,17 @@ public static partial class TypeScriptOutput
     /* END:validation.ts */
     """;
 
-    // 3. All mutation hooks in one file (server-driven URLs)
+    // 3. All mutation hooks - NO STRINGS, use Routes from routeTree
     public const string Mutations = """
     /* IMPULSE:mutations.ts */
     import { useImpulseMutation } from '@impulse/react'
     import { CreateResidentSchema, UpdateResidentSchema } from './validation'
+    import { Routes } from './routeTree'
     import type { CreateResidentRequest, CreateResidentResponse } from './types'
 
     export function useCreateResident() {
       return useImpulseMutation<CreateResidentRequest, CreateResidentResponse>({
-        endpoint: '/residents',  // Server-driven: same URL pattern
+        endpoint: Routes.residents(),
         method: 'POST',
         schema: CreateResidentSchema,
       })
@@ -460,7 +486,7 @@ public static partial class TypeScriptOutput
 
     export function useUpdateResident(id: number) {
       return useImpulseMutation({
-        endpoint: `/residents/${id}`,  // Server-driven: same URL pattern
+        endpoint: Routes.residentDetail(id),
         method: 'PUT',
         schema: UpdateResidentSchema,
       })
@@ -468,14 +494,29 @@ public static partial class TypeScriptOutput
     /* END:mutations.ts */
     """;
 
-    // 4. Route tree + router (server-driven, not API-first)
+    // 4. Route tree - NO STRINGS anywhere, all from RoutePaths/Routes
     public const string RouteTree = """
     /* IMPULSE:routeTree.ts */
     import { createRootRoute, createRoute, createRouter, defer } from '@tanstack/react-router'
     import { App } from '../src/App'
     import type { ResidentDetailLoaderData } from './types'
 
-    // Server-driven: same URL for HTML (initial) and JSON (navigation)
+    // ROUTE PATHS - Single source of truth (generated from C#)
+    export const RoutePaths = {
+      residents: '/residents',
+      residentDetail: '/residents/$id',
+      residentMedications: '/residents/$id/medications',
+    } as const
+
+    // PATH BUILDERS - Derive from RoutePaths, NO inline strings
+    export const Routes = {
+      residents: () => RoutePaths.residents,
+      residentDetail: (id: number | string) =>
+        RoutePaths.residentDetail.replace('$id', String(id)),
+      residentMedications: (id: number | string) =>
+        RoutePaths.residentMedications.replace('$id', String(id)),
+    }
+
     const impulseFetch = (url: string) =>
       fetch(url, { headers: { 'X-Impulse': '1' } }).then(r => r.json())
 
@@ -483,19 +524,19 @@ public static partial class TypeScriptOutput
 
     const residentsRoute = createRoute({
       getParentRoute: () => rootRoute,
-      path: '/residents',
-      loader: () => impulseFetch('/residents'),
+      path: RoutePaths.residents,
+      loader: () => impulseFetch(RoutePaths.residents),
       component: () => import('@features/Residents/List'),
     })
 
     const residentDetailRoute = createRoute({
       getParentRoute: () => rootRoute,
-      path: '/residents/$id',
+      path: RoutePaths.residentDetail,
       loader: async ({ params }): Promise<ResidentDetailLoaderData> => {
-        const props = await impulseFetch(`/residents/${params.id}`)
+        const props = await impulseFetch(Routes.residentDetail(params.id))
         return {
           props,
-          medications: defer(impulseFetch(`/residents/${params.id}/medications`)),
+          medications: defer(impulseFetch(Routes.residentMedications(params.id))),
         }
       },
       component: () => import('@features/Residents/Detail'),
