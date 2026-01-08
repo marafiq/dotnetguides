@@ -550,6 +550,145 @@ export function residentDetailPath(id: number) {
 
 ---
 
+## Inspiration: FastEndpoints REPR Pattern
+
+Learn from [FastEndpoints](https://fast-endpoints.com/) and Nancy:
+
+### REPR: Request → Endpoint → Response
+
+```csharp
+// One file per endpoint (vertical slice)
+// Features/Residents/List.cs
+public record ListResidentsRequest(int Page = 1, int PageSize = 20);
+public record ListResidentsResponse(IReadOnlyList<ResidentSummary> Residents, int Total);
+
+public class ListResidentsEndpoint : ImpulseEndpoint<ListResidentsRequest, ListResidentsResponse>
+{
+    public override string Route => "/residents";
+    public override string Component => "./Residents/List";
+
+    public override async Task<ListResidentsResponse> HandleAsync(ListResidentsRequest req, CancellationToken ct)
+    {
+        var residents = await _db.Residents
+            .Skip((req.Page - 1) * req.PageSize)
+            .Take(req.PageSize)
+            .ToListAsync(ct);
+
+        return new ListResidentsResponse(residents, await _db.Residents.CountAsync(ct));
+    }
+}
+```
+
+### Key Decisions from FastEndpoints/Nancy
+
+**1. One Endpoint = One Class (Vertical Slice)**
+```
+Features/
+├── Residents/
+│   ├── List.cs         # GET /residents
+│   ├── Detail.cs       # GET /residents/{id}
+│   ├── Create.cs       # POST /residents
+│   └── Component.tsx   # React component
+```
+
+**2. Request/Response Colocated**
+```csharp
+// Everything for one endpoint in one file
+public record CreateResidentRequest(string Name, string Room);
+public record CreateResidentResponse(int Id, string Message);
+
+public class CreateResidentEndpoint : ImpulseEndpoint<CreateResidentRequest, CreateResidentResponse>
+{
+    // Validator inline or separate file
+    public class Validator : AbstractValidator<CreateResidentRequest>
+    {
+        public Validator()
+        {
+            RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
+            RuleFor(x => x.Room).NotEmpty();
+        }
+    }
+}
+```
+
+**3. Base Class Optional (unlike MVC)**
+```csharp
+// Can use base class for common behavior
+public abstract class ImpulseEndpoint<TRequest, TResponse>
+{
+    public abstract string Route { get; }
+    public abstract string Component { get; }
+    public abstract Task<TResponse> HandleAsync(TRequest req, CancellationToken ct);
+}
+
+// Or just use Minimal API directly
+app.MapGet("/residents", (int page, IDb db) => /* handler */);
+```
+
+**4. Processors for Cross-Cutting Concerns**
+```csharp
+// Pre-processor: runs before handler
+public class LoggingProcessor : IPreProcessor<object>
+{
+    public Task Process(object req, HttpContext ctx, CancellationToken ct)
+    {
+        Log.Information("Request to {Path}", ctx.Request.Path);
+        return Task.CompletedTask;
+    }
+}
+
+// Post-processor: runs after handler
+public class CachingProcessor : IPostProcessor<object, object>
+{
+    public Task Process(object req, object res, HttpContext ctx, CancellationToken ct)
+    {
+        ctx.Response.Headers.CacheControl = "max-age=60";
+        return Task.CompletedTask;
+    }
+}
+```
+
+**5. Immutable Records for DTOs**
+```csharp
+// Always records, never classes
+public record ResidentSummary(int Id, string Name, string Room);
+public record ResidentsListProps(IReadOnlyList<ResidentSummary> Residents, int TotalCount);
+
+// Benefits:
+// - Immutable by default
+// - Value equality
+// - With-expressions for updates
+// - Primary constructor = less boilerplate
+```
+
+### Registration (Nancy-style modules)
+
+```csharp
+// Features/Residents/Endpoints.cs
+public class ResidentsModule : ImpulseModule
+{
+    public override string BasePath => "/residents";
+
+    public override void Configure(IEndpointRouteBuilder app)
+    {
+        app.MapGet("/", List).Impulse("./Residents/List");
+        app.MapGet("/{id:int}", Detail).Impulse("./Residents/Detail");
+        app.MapPost("/", Create).ImpulseMutation();
+        app.MapPut("/{id:int}", Update).ImpulseMutation();
+        app.MapDelete("/{id:int}", Delete).ImpulseMutation();
+    }
+
+    Results<Ok<ListResponse>, NotFound> List([AsParameters] ListRequest req) => ...;
+    Results<Ok<DetailResponse>, NotFound> Detail(int id) => ...;
+    Results<Ok<CreateResponse>, ValidationProblem> Create(CreateRequest req) => ...;
+}
+
+// Program.cs - just register modules
+app.MapImpulseModules();
+```
+
+---
+
 ## Benefits
 
 | Current | v2 |
