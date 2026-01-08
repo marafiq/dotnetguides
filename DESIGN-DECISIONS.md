@@ -2,6 +2,10 @@
 
 This document captures the reasoning behind key architectural decisions, based on official documentation research and core principles.
 
+**Related docs:**
+- [IMPULSE-SPEC.md](./IMPULSE-SPEC.md) - App developer guide (what users see)
+- [IMPULSE-FRAMEWORK.md](./IMPULSE-FRAMEWORK.md) - Framework developer guide (how we build it)
+
 ---
 
 ## 1. Server-Driven vs API-First

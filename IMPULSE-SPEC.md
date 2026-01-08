@@ -1,49 +1,188 @@
-# Impulse v2 Specification
+# Impulse v2 - App Developer Guide
+
+> What you see and do when building apps with Impulse
 
 ## Core Principles
 
 1. **Server-Driven** - Same URL returns HTML (browser) or JSON (`X-Impulse: 1` header)
-2. **Zero Magic Strings** - All paths from generated `RoutePaths` / `Routes`
-3. **Router Context** - DI via TanStack Router context, not imports
-4. **Invalidation** - Mutations call `router.invalidate()` to refresh
-5. **4 Generated Files** - types.ts, validation.ts, mutations.ts, routeTree.ts
+2. **Zero Magic Strings** - All paths from generated `RoutePaths` / `Routes` constants
+3. **Type Safety** - C# types → TypeScript types, FluentValidation → Zod
+4. **Single Command** - `dotnet run` handles everything (build, generate, serve, HMR)
 
 ---
 
-## 1. Server-Driven Architecture
+## 1. Getting Started
 
+```bash
+dotnet new impulse -n MyApp
+cd MyApp
+dotnet run
+# Browser opens at localhost:5173, HMR enabled
 ```
-Initial Load:   GET /residents/123 → HTML with <script id="__IMPULSE_PROPS__">{...}</script>
-Navigation:     GET /residents/123 + X-Impulse:1 → JSON only
-```
-
-| API-First (wrong) | Server-Driven (Impulse) |
-|-------------------|-------------------------|
-| `/api/residents` returns JSON | `/residents` returns HTML or JSON |
-| Client fetches separately | Same URL, content negotiation |
 
 ---
 
-## 2. Generated TypeScript
+## 2. Project Structure
 
-### routeTree.ts
+```
+MyApp/
+├── Program.cs                 # YOU WRITE: Route mappings
+├── Handlers/                  # YOU WRITE: Request handlers
+├── Validators/                # YOU WRITE: FluentValidation rules
+├── Models/                    # YOU WRITE: Props types (C# records)
+│
+├── src/
+│   ├── features/              # YOU WRITE: React components
+│   │   └── Residents/
+│   │       ├── List.tsx
+│   │       └── Detail.tsx
+│   ├── App.tsx                # YOU WRITE: Root layout
+│   ├── main.tsx               # FROM TEMPLATE: App entry
+│   └── impulse/
+│       └── hooks.ts           # FROM TEMPLATE: useImpulseMutation
+│
+├── generated/                 # AUTO-GENERATED (don't edit)
+│   ├── types.ts               # C# records → TS interfaces
+│   ├── validation.ts          # FluentValidation → Zod schemas
+│   ├── mutations.ts           # POST/PUT/DELETE hooks
+│   └── routeTree.ts           # Routes + loaders + router
+│
+├── vite.config.ts             # FROM TEMPLATE: Dev proxy config
+└── package.json               # FROM TEMPLATE: Dependencies
+```
+
+**Legend:**
+- `YOU WRITE` - Your application code
+- `FROM TEMPLATE` - Static files, can customize
+- `AUTO-GENERATED` - Regenerated on C# changes, don't edit
+
+---
+
+## 3. What You Write (C#)
+
+### Program.cs - Route Mappings
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+builder.AddImpulse();
+
+var app = builder.Build();
+app.UseImpulse();
+
+// Routes.Residents.List is generated constant "/residents"
+app.MapGet(Routes.Residents.List, ResidentsHandler.List)
+   .Impulse<ResidentListProps>();
+
+app.MapGet(Routes.Residents.Detail, ResidentsHandler.Detail)
+   .Impulse<ResidentDetailProps>();
+
+app.MapPost(Routes.Residents.Create, ResidentsHandler.Create);
+
+app.Run();
+```
+
+### Handler - Business Logic
+
+```csharp
+public static class ResidentsHandler
+{
+    public static async Task<Results<Ok<ResidentDetailProps>, NotFound>> Detail(
+        int id, IResidentService service, CancellationToken ct)
+    {
+        var resident = await service.GetAsync(id, ct);
+        if (resident is null) return TypedResults.NotFound();
+        return TypedResults.Ok(new ResidentDetailProps(resident));
+    }
+}
+```
+
+### Props - Data Contracts
+
+```csharp
+public record ResidentListProps(IReadOnlyList<ResidentSummary> Residents);
+public record ResidentDetailProps(Resident Resident, DateTime CreatedAt);
+public record CreateResidentRequest(string Name, string Email);
+```
+
+### Validator - Generates Zod
+
+```csharp
+public class CreateResidentValidator : AbstractValidator<CreateResidentRequest>
+{
+    public CreateResidentValidator()
+    {
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
+        RuleFor(x => x.Email).NotEmpty().EmailAddress();
+    }
+}
+```
+
+---
+
+## 4. What Gets Generated (TypeScript)
+
+When you build, these files are auto-generated from your C# code:
+
+### generated/types.ts
 
 ```typescript
-import {
-  createRouter, createRoute, createRootRouteWithContext, lazyRouteComponent,
-} from '@tanstack/react-router'
+// From your C# records
+export interface ResidentListProps {
+  residents: Array<{ id: number; name: string }>
+}
+
+export interface ResidentDetailProps {
+  resident: { id: number; name: string; email: string }
+  createdAt: string
+}
+
+export interface CreateResidentRequest {
+  name: string
+  email: string
+}
+```
+
+### generated/validation.ts
+
+```typescript
+// From your FluentValidation rules
+import { z } from 'zod'
+
+export const CreateResidentSchema = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().min(1).email(),
+})
+```
+
+### generated/mutations.ts
+
+```typescript
+// From your MapPost/MapPut/MapDelete endpoints
+import { useRouter } from '@tanstack/react-router'
+import { useImpulseMutation } from '../src/impulse/hooks'
+import { Routes } from './routeTree'
+import { CreateResidentSchema } from './validation'
+import type { CreateResidentRequest } from './types'
+
+export function useCreateResident() {
+  const router = useRouter()
+  return useImpulseMutation<CreateResidentRequest, { id: number }>({
+    endpoint: Routes.residents(),
+    method: 'POST',
+    schema: CreateResidentSchema,
+    onSuccess: () => router.invalidate(),  // Refreshes all route data
+  })
+}
+```
+
+### generated/routeTree.ts
+
+```typescript
+// From your .Impulse<T>() route mappings
+import { createRouter, createRoute, createRootRouteWithContext, lazyRouteComponent } from '@tanstack/react-router'
 import type { ResidentListProps, ResidentDetailProps } from './types'
 
-export interface ImpulseContext {
-  impulseFetch: <T>(url: string) => Promise<T>
-  invalidate: () => Promise<void>
-}
-
-// Router type registration for full type safety
-declare module '@tanstack/react-router' {
-  interface Register { router: ReturnType<typeof createImpulseRouter> }
-}
-
+// Zero magic strings - all paths are constants
 export const RoutePaths = {
   residents: '/residents',
   residentDetail: '/residents/$id',
@@ -55,6 +194,18 @@ export const Routes = {
     RoutePaths.residentDetail.replace('$id', String(id)),
 }
 
+// Router context for DI
+export interface ImpulseContext {
+  impulseFetch: <T>(url: string) => Promise<T>
+  invalidate: () => Promise<void>
+}
+
+// Type registration for full type safety
+declare module '@tanstack/react-router' {
+  interface Register { router: ReturnType<typeof createImpulseRouter> }
+}
+
+// Routes with typed loaders
 const rootRoute = createRootRouteWithContext<ImpulseContext>()({
   component: lazyRouteComponent(() => import('../src/App')),
 })
@@ -88,137 +239,17 @@ export function createImpulseRouter(userContext?: Partial<ImpulseContext>) {
 }
 ```
 
-### mutations.ts
-
-```typescript
-import { useRouter } from '@tanstack/react-router'
-import { useImpulseMutation } from '../src/impulse/hooks'  // From template
-import { Routes } from './routeTree'
-import { CreateResidentSchema } from './validation'
-import type { CreateResidentRequest, CreateResidentResponse } from './types'
-
-export function useCreateResident() {
-  const router = useRouter()
-  return useImpulseMutation<CreateResidentRequest, CreateResidentResponse>({
-    endpoint: Routes.residents(),
-    method: 'POST',
-    schema: CreateResidentSchema,
-    onSuccess: () => router.invalidate(),
-  })
-}
-```
-
-### validation.ts
-
-```typescript
-import { z } from 'zod'
-
-export const CreateResidentSchema = z.object({
-  name: z.string().min(1).max(100),
-  email: z.string().min(1).email(),
-})
-```
-
-### types.ts
-
-```typescript
-export interface ResidentListProps {
-  residents: Array<{ id: number; name: string }>
-}
-
-export interface ResidentDetailProps {
-  resident: { id: number; name: string; email: string }
-  createdAt: string
-}
-
-export interface CreateResidentRequest {
-  name: string
-  email: string
-}
-
-export interface CreateResidentResponse {
-  id: number
-}
-```
-
 ---
 
-## 3. Developer API (C#)
+## 5. What You Write (React)
 
-### Routes.g.cs (Generated)
-
-```csharp
-// Auto-generated from [Impulse] attributes
-public static class Routes
-{
-    public static class Residents
-    {
-        public const string List = "/residents";
-        public const string Detail = "/residents/{id:int}";
-        public const string Create = "/residents";
-    }
-}
-```
-
-### Program.cs
-
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-builder.AddImpulse();
-
-var app = builder.Build();
-app.UseImpulse();
-
-app.MapGet(Routes.Residents.List, ResidentsHandler.List)
-   .Impulse<ResidentListProps>();
-
-app.MapGet(Routes.Residents.Detail, ResidentsHandler.Detail)
-   .Impulse<ResidentDetailProps>();
-
-app.MapPost(Routes.Residents.Create, ResidentsHandler.Create);
-
-app.Run();
-```
-
-### Handler
-
-```csharp
-public static class ResidentsHandler
-{
-    public static async Task<Results<Ok<ResidentDetailProps>, NotFound>> Detail(
-        int id, IResidentService service, CancellationToken ct)
-    {
-        var resident = await service.GetAsync(id, ct);
-        if (resident is null) return TypedResults.NotFound();
-        return TypedResults.Ok(new ResidentDetailProps(resident));
-    }
-}
-```
-
-### Validator (FluentValidation → Zod)
-
-```csharp
-public class CreateResidentValidator : AbstractValidator<CreateResidentRequest>
-{
-    public CreateResidentValidator()
-    {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Email).NotEmpty().EmailAddress();
-    }
-}
-```
-
----
-
-## 4. Developer API (React)
-
-### Component (Typed Loader Data)
+### Component - Using Loader Data
 
 ```tsx
 // src/features/Residents/Detail.tsx
 import { getRouteApi } from '@tanstack/react-router'
 
-const route = getRouteApi('/residents/$id')  // Type-safe via router registration
+const route = getRouteApi('/residents/$id')
 
 export default function ResidentDetail() {
   const data = route.useLoaderData()  // Typed: ResidentDetailProps
@@ -226,7 +257,7 @@ export default function ResidentDetail() {
 }
 ```
 
-### Form with Mutation
+### Form - Using Generated Mutation
 
 ```tsx
 // src/features/Residents/Create.tsx
@@ -237,93 +268,95 @@ export default function CreateResident() {
   return (
     <form onSubmit={submit}>
       <input {...register('name')} />
-      {errors.name && <span>{errors.name}</span>}
+      {errors.name && <span>{errors.name.message}</span>}
+      <input {...register('email')} />
+      {errors.email && <span>{errors.email.message}</span>}
       <button disabled={isSubmitting}>Create</button>
     </form>
   )
 }
 ```
 
-### App Entry
+### Navigation - Using Generated Routes
 
 ```tsx
-// src/main.tsx
-import { createRoot } from 'react-dom/client'
-import { RouterProvider } from '@tanstack/react-router'
-import { createImpulseRouter } from './generated/routeTree'
+import { Link } from '@tanstack/react-router'
+import { Routes } from '../generated/routeTree'
 
-createRoot(document.getElementById('root')!).render(
-  <RouterProvider router={createImpulseRouter()} />
-)
-```
-
-### Template: hooks.ts (Provided by Impulse.Templates)
-
-```typescript
-// src/impulse/hooks.ts - Static file from template, not generated
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import type { ZodSchema } from 'zod'
-
-interface MutationOptions<TReq, TRes> {
-  endpoint: string
-  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  schema: ZodSchema<TReq>
-  onSuccess?: (data: TRes) => void
-}
-
-export function useImpulseMutation<TReq, TRes>(opts: MutationOptions<TReq, TRes>) {
-  const form = useForm<TReq>({ resolver: zodResolver(opts.schema) })
-  const [isSubmitting, setSubmitting] = useState(false)
-
-  const submit = form.handleSubmit(async (data) => {
-    setSubmitting(true)
-    try {
-      const res = await fetch(opts.endpoint, {
-        method: opts.method,
-        headers: { 'Content-Type': 'application/json', 'X-Impulse': '1' },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const result = await res.json() as TRes
-      opts.onSuccess?.(result)
-      return result
-    } finally {
-      setSubmitting(false)
-    }
-  })
-
-  return {
-    register: form.register,
-    errors: form.formState.errors,
-    submit,
-    isSubmitting,
-  }
-}
+// Type-safe navigation, no magic strings
+<Link to={Routes.residentDetail(resident.id)}>View Details</Link>
 ```
 
 ---
 
-## 5. Extensibility
+## 6. How It Works
 
-### Extend Context
+### Server-Driven Architecture
 
-```typescript
-declare module './generated/routeTree' {
-  interface ImpulseContext { analytics: AnalyticsClient }
-}
+Same URL, different response based on request:
 
-export const router = createImpulseRouter({ analytics: new AnalyticsClient() })
+```
+Browser navigation:  GET /residents/123           → Full HTML page
+Client navigation:   GET /residents/123 + X-Impulse:1 → JSON only
 ```
 
-### Override Fetch
+### Development Flow
+
+```
+dotnet run
+    ↓
+┌────────────────────────────────────────────────────┐
+│ 1. BUILD: C# compiles, source generator runs       │
+│    → Routes.g.cs (C# constants)                    │
+│    → generated/*.ts (TypeScript files)             │
+└────────────────────────────────────────────────────┘
+    ↓
+┌────────────────────────────────────────────────────┐
+│ 2. SERVE: Two servers start automatically          │
+│    Kestrel :5000 → handles data/HTML               │
+│    Vite :5173 → serves React + HMR                 │
+│    Browser → Vite → proxy to Kestrel               │
+└────────────────────────────────────────────────────┘
+    ↓
+┌────────────────────────────────────────────────────┐
+│ 3. EDIT:                                           │
+│    .tsx change → Vite HMR → ~50ms                  │
+│    .cs change → rebuild + regenerate → ~2s         │
+└────────────────────────────────────────────────────┘
+```
+
+### Production Build
+
+```bash
+dotnet publish -c Release
+```
+
+```
+┌────────────────────────────────────────────────────┐
+│ 1. BUILD: Source gen + bun run build               │
+│    → dist/assets/index-[hash].js                   │
+│    → wwwroot/ (copied)                             │
+└────────────────────────────────────────────────────┘
+    ↓
+┌────────────────────────────────────────────────────┐
+│ 2. DEPLOY: Single Kestrel process                  │
+│    /assets/* → static files (immutable cache)      │
+│    /* → HTML with embedded props + hashed assets   │
+└────────────────────────────────────────────────────┘
+```
+
+---
+
+## 7. Customization
+
+### Add Auth Header to All Requests
 
 ```typescript
+// src/main.tsx
 const router = createImpulseRouter({
   impulseFetch: async (url) => {
     const res = await fetch(url, {
-      headers: { 'X-Impulse': '1', 'Authorization': `Bearer ${await getToken()}` },
+      headers: { 'X-Impulse': '1', 'Authorization': `Bearer ${getToken()}` },
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
@@ -331,114 +364,35 @@ const router = createImpulseRouter({
 })
 ```
 
----
-
-## 6. Tech Stack
-
-| Tool | Purpose |
-|------|---------|
-| .NET 10 | Minimal API, source generators |
-| React 19 | Frontend |
-| TanStack Router | Type-safe routing, context DI, loaders |
-| react-hook-form | Form state, validation binding |
-| FluentValidation | Server validation → generates Zod |
-| Zod | Client validation (generated from FluentValidation) |
-| Bun | Runtime, package manager |
-| Vite | Bundler, HMR, dev proxy |
-| tsgo | Fast TS compiler |
-
----
-
-## 7. Development Flow
-
-```
-dotnet run
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ BUILD: Roslyn → Routes.g.cs + TypeScript.g.cs                   │
-│        MSBuild extracts → generated/*.ts                        │
-└─────────────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ SERVERS: Kestrel (:5000) + Vite (:5173)                         │
-│          Browser → Vite → proxy to Kestrel for data             │
-└─────────────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ HMR: Edit .tsx → ~50ms │ Edit .cs → regenerate → ~2s            │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### vite.config.ts (Template)
+### Add Custom Context (e.g., Analytics)
 
 ```typescript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+// Extend the context type
+declare module './generated/routeTree' {
+  interface ImpulseContext { analytics: AnalyticsClient }
+}
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5173,
-    proxy: {
-      // All non-asset requests proxy to Kestrel
-      '^(?!/src|/node_modules|/@).*': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-    },
-  },
-})
+// Provide implementation
+const router = createImpulseRouter({ analytics: new AnalyticsClient() })
+
+// Use in components
+const { analytics } = useRouterContext()
 ```
 
 ---
 
-## 8. Production Flow
+## 8. Tech Stack
 
-```
-dotnet publish -c Release
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ BUILD: Source gen → extract TS → bun run build                  │
-│        Output: dist/assets/index-[hash].js, manifest.json       │
-│        Copy to wwwroot/                                         │
-└─────────────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ RUNTIME: Kestrel only (single process)                          │
-│   /assets/* → static files (immutable cache)                    │
-│   /* → HTML with __IMPULSE_PROPS__ + hashed asset paths         │
-└─────────────────────────────────────────────────────────────────┘
-```
+| You Use | Purpose |
+|---------|---------|
+| .NET 10 Minimal API | Route handlers, business logic |
+| FluentValidation | Validation rules (→ generates Zod) |
+| React 19 | UI components |
+| TanStack Router | Navigation, data loading |
+| react-hook-form | Form state (via useImpulseMutation) |
 
----
-
-## 9. Developer Experience
-
-```bash
-dotnet new impulse -n MyApp && cd MyApp && dotnet run
-# Browser opens, working app, HMR enabled
-```
-
-**Automated:** bun install, vite dev server, code generation, proxy config, hashed assets
-
----
-
-## 10. NuGet Structure
-
-```
-Impulse                 → Meta-package (references all below)
-├── Impulse.Core        → Attributes, extensions
-├── Impulse.SourceGen   → Roslyn generator
-├── Impulse.MSBuild     → TS extraction task
-├── Impulse.Runtime     → Middleware, asset manifest
-└── Impulse.Templates   → dotnet new impulse
-    ├── src/impulse/hooks.ts     (useImpulseMutation)
-    ├── src/main.tsx             (app entry)
-    ├── vite.config.ts           (proxy config)
-    └── package.json             (dependencies)
-```
+| Runs Automatically | Purpose |
+|--------------------|---------|
+| Roslyn Source Gen | Generates routes + TypeScript |
+| Vite | Dev server, HMR, bundling |
+| Bun | Package management, TS compilation |
