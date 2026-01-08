@@ -9,7 +9,7 @@ generated/
 ├── types.ts       # All interfaces (props, requests, responses, loader data)
 ├── validation.ts  # All Zod schemas (from FluentValidation)
 ├── mutations.ts   # All mutation hooks (POST/PUT/DELETE)
-└── routeTree.ts   # Routes + router + type registration
+└── routeTree.ts   # Routes + router instance
 ```
 
 ---
@@ -250,12 +250,8 @@ export const routeTree = rootRoute.addChildren([
 // Router instance (exported for main.tsx)
 export const router = createRouter({ routeTree })
 
-// Type registration (enables type-safe navigation)
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
-  }
-}
+// No type registration needed - routes are generated from C#,
+// so typos in route paths are impossible by construction
 ```
 
 ### No TanStack Plugin Needed:
@@ -308,7 +304,7 @@ ClientApp/
     ├── types.ts                  # All interfaces (props, requests, loader data)
     ├── validation.ts             # All Zod schemas
     ├── mutations.ts              # All mutation hooks
-    └── routeTree.ts              # Routes + router + type registration
+    └── routeTree.ts              # Routes + router instance
 ```
 
 **That's it. 4 files.**
@@ -435,12 +431,7 @@ public static partial class TypeScriptOutput
     // Router instance
     export const router = createRouter({ routeTree })
 
-    // Type registration
-    declare module '@tanstack/react-router' {
-      interface Register {
-        router: typeof router
-      }
-    }
+    // No type registration - routes generated from C#, typos impossible
     /* END:routeTree.ts */
     """;
 }
