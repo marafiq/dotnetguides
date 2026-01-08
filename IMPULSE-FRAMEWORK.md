@@ -609,16 +609,42 @@ dotnet test --filter "Category=E2E"
 
 **No manual steps. No cat commands. No editing generated code. Ever.**
 
-The build system must be fully automated and reproducible:
+### Step 0: Skeleton Loop Must Work First
 
-### Single Command Operations
+Before writing ANY framework code, prove the skeleton builds:
+
+```bash
+# Create skeleton Impulse project (template with minimal structure)
+dotnet new impulse -n TestApp
+cd TestApp
+
+# THIS MUST PASS - non-negotiable
+dotnet restore   # ✓ NuGet + bun install
+dotnet build     # ✓ Compiles (generates empty files)
+dotnet test      # ✓ Passes (even with zero tests)
+```
+
+If this fails, fix it before writing any code. The loop is the foundation.
+
+### Core Commands
 
 ```bash
 dotnet restore    # Restores everything (NuGet + npm)
 dotnet build      # Compiles + generates + extracts
 dotnet test       # Runs ALL tests (unit + integration + E2E)
-dotnet run        # Full dev environment
-dotnet publish    # Production-ready output
+```
+
+### Development Commands
+
+```bash
+dotnet run        # Full dev environment (may use helper scripts)
+./scripts/dev.sh  # Custom dev script if dotnet run needs setup
+```
+
+### Production (After Everything Works)
+
+```bash
+dotnet publish -c Release   # Production-ready output
 ```
 
 ### Build Pipeline (Automated)

@@ -12,28 +12,58 @@ This document captures the reasoning behind key architectural decisions, based o
 
 **Decision:** Establish and prove the build loop works before writing any code.
 
-**The order matters:**
-1. Create project structure (template)
-2. Set up build targets (MSBuild)
-3. Prove the loop works: `dotnet restore && dotnet build && dotnet test`
-4. THEN start writing code
+### Step 0: Skeleton Must Work
 
-**Why this is point zero:**
-- If you can't build, you can't test
-- If you can't test, you can't verify TDD
-- If you can't verify, you're guessing
-- Manual steps break CI/CD
-
-**Proof of working loop:**
 ```bash
-# Fresh clone must work
-git clone repo && cd repo
-dotnet restore   # ✓ All dependencies
-dotnet build     # ✓ Compiles, generates
-dotnet test      # ✓ All tests pass (even if zero tests)
+# Create skeleton structure
+dotnet new impulse -n MyApp
+cd MyApp
+
+# THIS MUST PASS before writing ANY code
+dotnet restore   # ✓ All dependencies restored
+dotnet build     # ✓ Compiles (even if empty)
+dotnet test      # ✓ Passes (even with zero tests)
 ```
 
-**Never write code until this passes.** The loop is the foundation everything else depends on.
+**The skeleton includes:**
+- Empty project structure (folders, csproj, package.json)
+- MSBuild targets wired up
+- Source generator registered (generates empty files if no [Impulse] attributes)
+- Test projects exist (can have zero tests initially)
+
+### Why This Is Point Zero
+
+```
+Without working loop:
+  Write code → Can't compile → Guess if it works
+  Write test → Can't run → Guess if it passes
+  CI fails → "Works on my machine"
+
+With working loop:
+  Skeleton builds → Add one thing → Still builds
+  Skeleton tests → Add one test → Still passes
+  Incremental progress with confidence
+```
+
+### What Step 0 Does NOT Include
+
+- `dotnet publish` producing deployable output (that's later)
+- Full E2E tests passing (need real code first)
+- All generated files populated (need [Impulse] attributes first)
+
+### Development Scripts Are OK
+
+```bash
+# Helper scripts for convenience during development
+./scripts/setup.sh      # One-time dev environment setup
+./scripts/dev.sh        # Start dev servers
+./scripts/test-all.sh   # Run full test suite
+
+# BUT the core loop must work without scripts
+dotnet restore && dotnet build && dotnet test
+```
+
+**Never write code until the skeleton loop passes.** Everything else builds on this foundation.
 
 ---
 

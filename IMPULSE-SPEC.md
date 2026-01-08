@@ -23,12 +23,27 @@ dotnet run
 
 **Everything is automated.** No manual file copying, no cat commands, no editing generated code. Ever.
 
+### Core Loop (Must Work First)
+
 ```bash
 dotnet restore    # Restores NuGet + runs bun install
 dotnet build      # Compiles C# + generates TypeScript
-dotnet test       # Runs all tests (C# + TS + E2E)
-dotnet run        # Builds + starts servers + opens browser
-dotnet publish    # Builds + bundles + outputs deployable folder
+dotnet test       # Runs all tests
+```
+
+This loop must pass on a fresh clone before any code is written.
+
+### Development Commands
+
+```bash
+dotnet run        # Builds + starts Kestrel + starts Vite
+./scripts/dev.sh  # Alternative: custom dev script if needed
+```
+
+### Production (After Core Loop Works)
+
+```bash
+dotnet publish -c Release   # Full build + bundle + deployable output
 ```
 
 ---
