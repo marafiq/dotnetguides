@@ -9,12 +9,42 @@ import {
   TextField,
   Divider,
   Checkbox,
+  Form,
 } from '@react-spectrum/s2';
 import type { CreateResidentRequest, Address, EmergencyContact } from '../../generated/types';
-import { CreateResidentRequestSchema } from '../../generated/validation';
 import { useCreateResidentMutation } from '../../generated/mutations';
 import { useImpulse } from '../../client/shared/ImpulseProvider';
-import { ZodError } from 'zod';
+import { ImpulseValidationError } from '../../client/impulse-runtime';
+import { z, ZodError } from 'zod';
+
+// ========================================
+// Form Validation Schema (Impulse Way)
+// Demonstrates nested Zod validation with
+// required fields and custom error messages
+// ========================================
+
+const AddressFormSchema = z.object({
+  street: z.string().min(1, 'Street is required'),
+  city: z.string().min(1, 'City is required'),
+  state: z.string().min(1, 'State is required'),
+  zipCode: z.string().min(1, 'ZIP Code is required'),
+});
+
+const EmergencyContactFormSchema = z.object({
+  name: z.string().min(1, 'Contact name is required'),
+  relationship: z.string().min(1, 'Relationship is required'),
+  phone: z.string().min(1, 'Phone number is required'),
+  email: z.string().email('Valid email is required'),
+});
+
+const CreateResidentFormSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  dateOfBirth: z.string().datetime({ message: 'Valid date required (YYYY-MM-DDTHH:mm:ssZ)' }),
+  roomNumber: z.string().min(1, 'Room number is required'),
+  address: AddressFormSchema.optional(),
+  emergencyContacts: z.array(EmergencyContactFormSchema).optional(),
+});
 
 // ========================================
 // Create Resident Form
@@ -108,8 +138,8 @@ export function CreateResidentForm({ onCancel, onSuccess }: CreateResidentFormPr
     };
 
     try {
-      // Validate with Zod (from generated schemas)
-      CreateResidentRequestSchema.parse(request);
+      // Validate with Zod (Impulse way - nested validation)
+      CreateResidentFormSchema.parse(request);
 
       // Execute mutation
       const result = await mutation.mutateAsync(request);
@@ -122,13 +152,17 @@ export function CreateResidentForm({ onCancel, onSuccess }: CreateResidentFormPr
       }
     } catch (err) {
       if (err instanceof ZodError) {
-        // Convert Zod errors to field errors
+        // Client-side validation (Zod) - Impulse way
         const fieldErrors: Record<string, string> = {};
         err.errors.forEach(error => {
           const path = error.path.join('.');
           fieldErrors[path] = error.message;
         });
         setErrors(fieldErrors);
+      } else if (err instanceof ImpulseValidationError) {
+        // Server-side validation (ProblemDetails) - Impulse way
+        // The server returned RFC 7807 ProblemDetails with field errors
+        setErrors(err.fieldErrors);
       } else if (err instanceof Error) {
         setErrors({ form: err.message });
       }
@@ -137,7 +171,14 @@ export function CreateResidentForm({ onCancel, onSuccess }: CreateResidentFormPr
 
   return (
     <Card UNSAFE_className="impulse-card form-card">
-      <form onSubmit={handleSubmit} noValidate>
+      {/* S2 Form component with validationErrors - the Impulse way
+          Errors from both Zod (client) and ProblemDetails (server)
+          are displayed automatically by S2 using field names */}
+      <Form
+        onSubmit={handleSubmit}
+        validationErrors={errors}
+        validationBehavior="aria"
+      >
         <Heading level={2}>Create New Resident</Heading>
         <Text UNSAFE_className="impulse-muted impulse-mb-4">
           Enter the resident's information below. Fields marked with * are required.
@@ -155,49 +196,37 @@ export function CreateResidentForm({ onCancel, onSuccess }: CreateResidentFormPr
           <Heading level={3}>Basic Information</Heading>
 
           <div className="form-row">
-            <div className="impulse-flex impulse-flex-col impulse-gap-1">
-              <TextField
-                label="First Name *"
-                value={formData.firstName || ''}
-                onChange={(value) => handleChange('firstName', value)}
-                isRequired
-                validationState={errors.firstName ? 'invalid' : undefined}
-              />
-              {errors.firstName && <Text UNSAFE_className="impulse-refused impulse-muted-sm">{errors.firstName}</Text>}
-            </div>
-            <div className="impulse-flex impulse-flex-col impulse-gap-1">
-              <TextField
-                label="Last Name *"
-                value={formData.lastName || ''}
-                onChange={(value) => handleChange('lastName', value)}
-                isRequired
-                validationState={errors.lastName ? 'invalid' : undefined}
-              />
-              {errors.lastName && <Text UNSAFE_className="impulse-refused impulse-muted-sm">{errors.lastName}</Text>}
-            </div>
+            <TextField
+              label="First Name *"
+              name="firstName"
+              value={formData.firstName || ''}
+              onChange={(value) => handleChange('firstName', value)}
+              isRequired
+            />
+            <TextField
+              label="Last Name *"
+              name="lastName"
+              value={formData.lastName || ''}
+              onChange={(value) => handleChange('lastName', value)}
+              isRequired
+            />
           </div>
 
           <div className="form-row">
-            <div className="impulse-flex impulse-flex-col impulse-gap-1">
-              <TextField
-                label="Date of Birth * (YYYY-MM-DD)"
-                value={formData.dateOfBirth || ''}
-                onChange={(value) => handleChange('dateOfBirth', value)}
-                isRequired
-                validationState={errors.dateOfBirth ? 'invalid' : undefined}
-              />
-              {errors.dateOfBirth && <Text UNSAFE_className="impulse-refused impulse-muted-sm">{errors.dateOfBirth}</Text>}
-            </div>
-            <div className="impulse-flex impulse-flex-col impulse-gap-1">
-              <TextField
-                label="Room Number *"
-                value={formData.roomNumber || ''}
-                onChange={(value) => handleChange('roomNumber', value)}
-                isRequired
-                validationState={errors.roomNumber ? 'invalid' : undefined}
-              />
-              {errors.roomNumber && <Text UNSAFE_className="impulse-refused impulse-muted-sm">{errors.roomNumber}</Text>}
-            </div>
+            <TextField
+              label="Date of Birth * (YYYY-MM-DD)"
+              name="dateOfBirth"
+              value={formData.dateOfBirth || ''}
+              onChange={(value) => handleChange('dateOfBirth', value)}
+              isRequired
+            />
+            <TextField
+              label="Room Number *"
+              name="roomNumber"
+              value={formData.roomNumber || ''}
+              onChange={(value) => handleChange('roomNumber', value)}
+              isRequired
+            />
           </div>
         </div>
 
@@ -218,25 +247,33 @@ export function CreateResidentForm({ onCancel, onSuccess }: CreateResidentFormPr
           {includeAddress && (
             <div className="impulse-mt-4">
               <TextField
-                label="Street"
+                label="Street *"
+                name="address.street"
                 value={formData.address?.street || ''}
                 onChange={(value) => handleAddressChange('street', value)}
+                isRequired
               />
               <div className="form-row impulse-mt-4">
                 <TextField
-                  label="City"
+                  label="City *"
+                  name="address.city"
                   value={formData.address?.city || ''}
                   onChange={(value) => handleAddressChange('city', value)}
+                  isRequired
                 />
                 <TextField
-                  label="State"
+                  label="State *"
+                  name="address.state"
                   value={formData.address?.state || ''}
                   onChange={(value) => handleAddressChange('state', value)}
+                  isRequired
                 />
                 <TextField
-                  label="ZIP Code"
+                  label="ZIP Code *"
+                  name="address.zipCode"
                   value={formData.address?.zipCode || ''}
                   onChange={(value) => handleAddressChange('zipCode', value)}
+                  isRequired
                 />
               </div>
             </div>
@@ -268,26 +305,34 @@ export function CreateResidentForm({ onCancel, onSuccess }: CreateResidentFormPr
               </div>
               <div className="form-row">
                 <TextField
-                  label="Name"
+                  label="Name *"
+                  name={`emergencyContacts.${index}.name`}
                   value={contact.name}
                   onChange={(value) => updateEmergencyContact(index, 'name', value)}
+                  isRequired
                 />
                 <TextField
-                  label="Relationship"
+                  label="Relationship *"
+                  name={`emergencyContacts.${index}.relationship`}
                   value={contact.relationship}
                   onChange={(value) => updateEmergencyContact(index, 'relationship', value)}
+                  isRequired
                 />
               </div>
               <div className="form-row impulse-mt-4">
                 <TextField
-                  label="Phone"
+                  label="Phone *"
+                  name={`emergencyContacts.${index}.phone`}
                   value={contact.phone}
                   onChange={(value) => updateEmergencyContact(index, 'phone', value)}
+                  isRequired
                 />
                 <TextField
-                  label="Email"
+                  label="Email *"
+                  name={`emergencyContacts.${index}.email`}
                   value={contact.email}
                   onChange={(value) => updateEmergencyContact(index, 'email', value)}
+                  isRequired
                 />
               </div>
             </Card>
@@ -317,7 +362,7 @@ export function CreateResidentForm({ onCancel, onSuccess }: CreateResidentFormPr
             </Button>
           </ButtonGroup>
         </div>
-      </form>
+      </Form>
     </Card>
   );
 }

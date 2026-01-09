@@ -17,6 +17,31 @@ export interface ImpulseData<T> {
 }
 
 // ========================================
+// ProblemDetails Error (RFC 7807)
+// Server-side validation errors returned
+// as structured problem details
+// ========================================
+
+export interface ProblemDetails {
+  type?: string;
+  title?: string;
+  status?: number;
+  detail?: string;
+  instance?: string;
+  errors?: Record<string, string[]>;
+}
+
+export class ImpulseValidationError extends Error {
+  constructor(
+    public readonly problemDetails: ProblemDetails,
+    public readonly fieldErrors: Record<string, string>
+  ) {
+    super(problemDetails.title || 'Validation failed');
+    this.name = 'ImpulseValidationError';
+  }
+}
+
+// ========================================
 // Mock Data for Preview Mode
 // When backend isn't running, return mock data
 // ========================================
@@ -135,12 +160,34 @@ export function createImpulseContext(): ImpulseContext {
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || `Mutation failed: ${response.status}`);
+          const errorBody = await response.json();
+
+          // Handle ProblemDetails (RFC 7807) - Impulse way
+          if (response.status === 400 && errorBody.errors) {
+            const problemDetails: ProblemDetails = errorBody;
+
+            // Convert ProblemDetails errors to field errors map
+            const fieldErrors: Record<string, string> = {};
+            if (problemDetails.errors) {
+              for (const [field, messages] of Object.entries(problemDetails.errors)) {
+                // Use first error message for each field
+                fieldErrors[field] = messages[0] || 'Invalid value';
+              }
+            }
+
+            throw new ImpulseValidationError(problemDetails, fieldErrors);
+          }
+
+          throw new Error(errorBody.error || errorBody.title || `Mutation failed: ${response.status}`);
         }
 
         return response.json();
       } catch (error) {
+        // Re-throw ImpulseValidationError as-is
+        if (error instanceof ImpulseValidationError) {
+          throw error;
+        }
+
         // In preview mode, return mock success
         console.warn(`Backend unavailable, mocking mutation for: ${url}`);
         return { id: Math.floor(Math.random() * 1000) } as TRes;
