@@ -2,6 +2,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import type { ImpulseContext } from '@impulse/react';
+import { RoutePaths } from './routePaths';
 import * as Types from './types';
 import * as Schemas from './validation';
 
@@ -17,7 +18,7 @@ export function useCreateResidentMutation(ctx: ImpulseContext) {
       // Validate with Zod before sending
       const validated = Schemas.CreateResidentRequestSchema.parse(data);
       return ctx.impulseMutate<Types.CreateResidentRequest, Types.CreateResidentResponse>(
-        '/residents',
+        RoutePaths.CreateResident,
         validated,
         'POST'
       );
@@ -41,7 +42,7 @@ export function useUpdateResidentMutation(ctx: ImpulseContext) {
       // Validate with Zod before sending
       const validated = Schemas.UpdateResidentRequestSchema.parse(data);
       return ctx.impulseMutate<Types.UpdateResidentRequest, Types.UpdateResidentResponse>(
-        '/residents/{id}',
+        RoutePaths.UpdateResident,
         validated,
         'PUT'
       );
@@ -65,7 +66,7 @@ export function useAddMedicationMutation(ctx: ImpulseContext) {
       // Validate with Zod before sending
       const validated = Schemas.AddMedicationRequestSchema.parse(data);
       return ctx.impulseMutate<Types.AddMedicationRequest, Types.AddMedicationResponse>(
-        '/residents/{residentId}/medications',
+        RoutePaths.AddMedication,
         validated,
         'POST'
       );
@@ -89,7 +90,7 @@ export function useRecordAdministrationMutation(ctx: ImpulseContext) {
       // Validate with Zod before sending
       const validated = Schemas.RecordAdministrationRequestSchema.parse(data);
       return ctx.impulseMutate<Types.RecordAdministrationRequest, Types.RecordAdministrationResponse>(
-        '/residents/{residentId}/medications/{medicationId}/administer',
+        RoutePaths.RecordAdministration,
         validated,
         'POST'
       );
@@ -113,7 +114,7 @@ export function useAddCareGoalMutation(ctx: ImpulseContext) {
       // Validate with Zod before sending
       const validated = Schemas.AddCareGoalRequestSchema.parse(data);
       return ctx.impulseMutate<Types.AddCareGoalRequest, Types.AddCareGoalResponse>(
-        '/residents/{residentId}/care-plan/goals',
+        RoutePaths.AddCareGoal,
         validated,
         'POST'
       );
@@ -137,7 +138,7 @@ export function useAddAssessmentMutation(ctx: ImpulseContext) {
       // Validate with Zod before sending
       const validated = Schemas.AddAssessmentRequestSchema.parse(data);
       return ctx.impulseMutate<Types.AddAssessmentRequest, Types.AddAssessmentResponse>(
-        '/residents/{residentId}/care-plan/assessments',
+        RoutePaths.AddAssessment,
         validated,
         'POST'
       );

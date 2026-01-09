@@ -179,4 +179,84 @@ public static class SimpleTests
         Assert(prop != null, "ImpulseContext should have IsImpulseRequest property");
         Assert(prop!.PropertyType == typeof(bool), "IsImpulseRequest should be bool");
     }
+
+    // ========================================
+    // Code Generator Tests - Zero Magic Strings
+    // ========================================
+
+    private static void Test_GeneratedMutations_ImportRoutePaths()
+    {
+        var mutationsPath = FindGeneratedFile("mutations.ts");
+        Assert(mutationsPath != null, "mutations.ts should exist in generated folder");
+
+        var content = File.ReadAllText(mutationsPath!);
+        Assert(content.Contains("import { RoutePaths }") || content.Contains("import {RoutePaths}"),
+            "mutations.ts must import RoutePaths - zero magic strings rule");
+    }
+
+    private static void Test_GeneratedMutations_UseRoutePaths_NotMagicStrings()
+    {
+        var mutationsPath = FindGeneratedFile("mutations.ts");
+        Assert(mutationsPath != null, "mutations.ts should exist");
+
+        var content = File.ReadAllText(mutationsPath!);
+
+        // Should use RoutePaths.X, not hardcoded strings like '/residents'
+        Assert(content.Contains("RoutePaths."),
+            "mutations.ts must use RoutePaths.X constants");
+
+        // Should NOT contain hardcoded route strings in impulseMutate calls
+        // Look for pattern: impulseMutate<...>('/... which indicates magic string
+        var hasMagicString = System.Text.RegularExpressions.Regex.IsMatch(
+            content, @"impulseMutate<[^>]+>\(\s*'\/");
+        Assert(!hasMagicString,
+            "mutations.ts must NOT have hardcoded route strings - use RoutePaths instead");
+    }
+
+    private static void Test_GeneratedLoaders_ImportRoutePaths()
+    {
+        var loadersPath = FindGeneratedFile("loaders.ts");
+        Assert(loadersPath != null, "loaders.ts should exist in generated folder");
+
+        var content = File.ReadAllText(loadersPath!);
+        Assert(content.Contains("import { RoutePaths }") || content.Contains("import {RoutePaths}"),
+            "loaders.ts must import RoutePaths - zero magic strings rule");
+    }
+
+    private static void Test_GeneratedLoaders_UseRoutePaths_NotMagicStrings()
+    {
+        var loadersPath = FindGeneratedFile("loaders.ts");
+        Assert(loadersPath != null, "loaders.ts should exist");
+
+        var content = File.ReadAllText(loadersPath!);
+
+        // Should use RoutePaths.X
+        Assert(content.Contains("RoutePaths."),
+            "loaders.ts must use RoutePaths.X constants");
+
+        // Should NOT contain hardcoded route strings like let url = '/residents'
+        var hasMagicString = System.Text.RegularExpressions.Regex.IsMatch(
+            content, @"let url = '\/");
+        Assert(!hasMagicString,
+            "loaders.ts must NOT have hardcoded route strings - use RoutePaths instead");
+    }
+
+    private static string? FindGeneratedFile(string fileName)
+    {
+        // Look for generated file relative to test assembly
+        var assemblyDir = Path.GetDirectoryName(typeof(SimpleTests).Assembly.Location);
+        var searchPaths = new[]
+        {
+            Path.Combine(assemblyDir!, "..", "..", "..", "..", "..", "samples", "SampleApp", "generated", fileName),
+            Path.Combine(assemblyDir!, "..", "..", "..", "..", "samples", "SampleApp", "generated", fileName),
+        };
+
+        foreach (var path in searchPaths)
+        {
+            var normalized = Path.GetFullPath(path);
+            if (File.Exists(normalized))
+                return normalized;
+        }
+        return null;
+    }
 }
