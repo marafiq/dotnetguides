@@ -156,7 +156,7 @@ function AlertsCard({ residents }: { residents?: readonly ResidentQuickView[] })
       </div>
 
       <div className="alert-list">
-        {residents?.slice(0, 4).map((resident) => (
+        {residents?.slice(0, 6).map((resident) => (
           <Link key={resident.id} to={getResidentPath(resident.id)} className="alert-item">
             <Avatar
               src={`https://api.dicebear.com/7.x/initials/svg?seed=${resident.firstName}%20${resident.lastName}&backgroundColor=fef3c7`}
@@ -207,7 +207,7 @@ function TasksCard({ tasks }: { tasks?: readonly UpcomingTask[] }) {
       </div>
 
       <div className="task-list">
-        {tasks?.slice(0, 5).map((task) => (
+        {tasks?.slice(0, 6).map((task) => (
           <div key={task.id} className={`task-item ${task.isOverdue ? 'task-overdue' : ''}`}>
             <div className="task-time">
               <span className="task-hour">{formatTime(task.dueAt)}</span>
@@ -303,7 +303,7 @@ function ScheduleCard({ schedule }: { schedule?: readonly DailyScheduleItem[] })
       </div>
 
       <div className="schedule-list">
-        {schedule?.slice(0, 5).map((item, index) => (
+        {schedule?.slice(0, 6).map((item, index) => (
           <div key={item.id} className={`schedule-item schedule-${item.status}`}>
             <div className="schedule-time">{item.time}</div>
             <div className="schedule-indicator">
@@ -347,7 +347,7 @@ function ActivityCard({ activities }: { activities?: readonly RecentActivity[] }
       </div>
 
       <div className="activity-list">
-        {activities?.slice(0, 4).map((activity) => (
+        {activities?.slice(0, 5).map((activity) => (
           <div key={activity.id} className="activity-item">
             <span className="activity-icon">{getTypeIcon(activity.type)}</span>
             <div className="activity-content">

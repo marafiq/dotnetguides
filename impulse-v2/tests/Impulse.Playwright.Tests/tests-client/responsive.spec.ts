@@ -7,6 +7,33 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Responsive Design', () => {
 
+  test('Dashboard renders correctly on desktop (1920px)', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 }); // Full HD
+    await page.goto('/dashboard');
+    await page.waitForTimeout(2000);
+
+    // Check heading is visible
+    const heading = page.locator('h1');
+    await expect(heading).toBeVisible({ timeout: 5000 });
+
+    // Take desktop screenshot
+    await page.screenshot({
+      path: 'test-results-client/dashboard-desktop.png',
+      fullPage: true
+    });
+  });
+
+  test('Residents renders correctly on desktop (1920px)', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto('/residents');
+    await page.waitForTimeout(2000);
+
+    await page.screenshot({
+      path: 'test-results-client/residents-desktop.png',
+      fullPage: true
+    });
+  });
+
   test('Dashboard renders correctly on mobile (375px)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 }); // iPhone X
     await page.goto('/dashboard');
