@@ -137,7 +137,7 @@ export function CreateResidentForm({ onCancel, onSuccess }: CreateResidentFormPr
 
   return (
     <Card UNSAFE_className="impulse-card form-card">
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <Heading level={2}>Create New Resident</Heading>
         <Text UNSAFE_className="impulse-muted impulse-mb-4">
           Enter the resident's information below. Fields marked with * are required.
