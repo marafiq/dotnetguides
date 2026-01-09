@@ -1,0 +1,35 @@
+<!-- MSBuild targets for Impulse v2 build automation -->
+<Project>
+  <!--
+    Build Pipeline:
+    1. dotnet restore
+    2. dotnet build
+    3. impulse-gen (generates TypeScript from endpoints)
+    4. dotnet test
+    5. npm test (Playwright E2E tests)
+  -->
+
+  <PropertyGroup>
+    <ImpulseGenPath>$(MSBuildThisFileDirectory)../src/Impulse.SourceGen/bin/Debug/net10.0/impulse-gen.dll</ImpulseGenPath>
+    <GeneratedOutputPath>$(MSBuildThisFileDirectory)../samples/SampleApp/generated</GeneratedOutputPath>
+    <PlaywrightTestPath>$(MSBuildThisFileDirectory)../tests/Impulse.Playwright.Tests</PlaywrightTestPath>
+  </PropertyGroup>
+
+  <!-- Target: Generate TypeScript after build -->
+  <Target Name="ImpulseGenerateTypeScript" AfterTargets="Build" Condition="'$(Configuration)' != 'Release'">
+    <Message Text="Generating TypeScript files..." Importance="high" />
+    <Exec Command="dotnet $(ImpulseGenPath) $(TargetPath) $(GeneratedOutputPath)"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          ContinueOnError="false" />
+    <Message Text="TypeScript generation complete." Importance="high" />
+  </Target>
+
+  <!-- Target: Run unit tests -->
+  <Target Name="ImpulseRunTests" AfterTargets="ImpulseGenerateTypeScript">
+    <Message Text="Running unit tests..." Importance="high" />
+    <Exec Command="dotnet run --project $(MSBuildThisFileDirectory)../tests/Impulse.Core.Tests"
+          WorkingDirectory="$(MSBuildThisFileDirectory).."
+          ContinueOnError="false" />
+  </Target>
+
+</Project>
