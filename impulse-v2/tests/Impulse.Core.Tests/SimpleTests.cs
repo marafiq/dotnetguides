@@ -317,4 +317,129 @@ public static class SimpleTests
         }
         return null;
     }
+
+    // ========================================
+    // ImpulseModule Tests (Nancy-style)
+    // ========================================
+
+    private static void Test_ImpulseModule_Exists()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseModule, Impulse.Core");
+        Assert(type != null, "ImpulseModule should exist");
+        Assert(type!.IsAbstract, "ImpulseModule should be abstract");
+        Assert(type.IsClass, "ImpulseModule should be a class");
+    }
+
+    private static void Test_ImpulseModule_HasBasePathProperty()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseModule, Impulse.Core");
+        Assert(type != null, "ImpulseModule should exist");
+
+        var prop = type!.GetProperty("BasePath");
+        Assert(prop != null, "ImpulseModule should have BasePath property");
+        Assert(prop!.PropertyType == typeof(string), "BasePath should be string type");
+    }
+
+    private static void Test_ImpulseModule_HasConfigureMethod()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseModule, Impulse.Core");
+        Assert(type != null, "ImpulseModule should exist");
+
+        var method = type!.GetMethod("Configure");
+        Assert(method != null, "ImpulseModule should have Configure method");
+        Assert(method!.IsAbstract, "Configure should be abstract");
+    }
+
+    // ========================================
+    // Pre/Post Processor Tests
+    // ========================================
+
+    private static void Test_IPreProcessor_Exists()
+    {
+        var type = Type.GetType("Impulse.Core.IPreProcessor, Impulse.Core");
+        Assert(type != null, "IPreProcessor should exist");
+        Assert(type!.IsInterface, "IPreProcessor should be an interface");
+    }
+
+    private static void Test_IPreProcessor_HasProcessAsyncMethod()
+    {
+        var type = Type.GetType("Impulse.Core.IPreProcessor, Impulse.Core");
+        Assert(type != null, "IPreProcessor should exist");
+
+        var method = type!.GetMethod("ProcessAsync");
+        Assert(method != null, "IPreProcessor should have ProcessAsync method");
+    }
+
+    private static void Test_IPostProcessor_Exists()
+    {
+        var type = Type.GetType("Impulse.Core.IPostProcessor, Impulse.Core");
+        Assert(type != null, "IPostProcessor should exist");
+        Assert(type!.IsInterface, "IPostProcessor should be an interface");
+    }
+
+    private static void Test_IPostProcessor_HasProcessAsyncMethod()
+    {
+        var type = Type.GetType("Impulse.Core.IPostProcessor, Impulse.Core");
+        Assert(type != null, "IPostProcessor should exist");
+
+        var method = type!.GetMethod("ProcessAsync");
+        Assert(method != null, "IPostProcessor should have ProcessAsync method");
+    }
+
+    // ========================================
+    // Deferred Loading Tests
+    // ========================================
+
+    private static void Test_DeferredAttribute_Exists()
+    {
+        var type = Type.GetType("Impulse.Core.DeferredAttribute, Impulse.Core");
+        Assert(type != null, "DeferredAttribute should exist");
+        Assert(type!.IsClass, "DeferredAttribute should be a class");
+        Assert(typeof(Attribute).IsAssignableFrom(type), "DeferredAttribute should inherit from Attribute");
+    }
+
+    private static void Test_DeferredAttribute_HasKeyAndPath()
+    {
+        var type = Type.GetType("Impulse.Core.DeferredAttribute, Impulse.Core");
+        Assert(type != null, "DeferredAttribute should exist");
+
+        var keyProp = type!.GetProperty("Key");
+        Assert(keyProp != null, "DeferredAttribute should have Key property");
+
+        var pathProp = type.GetProperty("Path");
+        Assert(pathProp != null, "DeferredAttribute should have Path property");
+    }
+
+    private static void Test_DeferredAttribute_AllowsMultiple()
+    {
+        var type = Type.GetType("Impulse.Core.DeferredAttribute, Impulse.Core");
+        Assert(type != null, "DeferredAttribute should exist");
+
+        var attrUsage = type!.GetCustomAttribute<AttributeUsageAttribute>();
+        Assert(attrUsage != null, "DeferredAttribute should have AttributeUsage");
+        Assert(attrUsage!.AllowMultiple, "DeferredAttribute should allow multiple");
+    }
+
+    // ========================================
+    // Generated Types File Tests
+    // ========================================
+
+    private static void Test_GeneratedTypes_HasInterfaces()
+    {
+        var typesPath = FindGeneratedFile("types.ts");
+        Assert(typesPath != null, "types.ts should exist in generated folder");
+
+        var content = File.ReadAllText(typesPath!);
+        Assert(content.Contains("export interface"), "types.ts must export interfaces");
+    }
+
+    private static void Test_GeneratedValidation_HasZodSchemas()
+    {
+        var validationPath = FindGeneratedFile("validation.ts");
+        Assert(validationPath != null, "validation.ts should exist in generated folder");
+
+        var content = File.ReadAllText(validationPath!);
+        Assert(content.Contains("import { z } from 'zod'"), "validation.ts must import zod");
+        Assert(content.Contains("z.object"), "validation.ts must have z.object schemas");
+    }
 }

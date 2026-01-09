@@ -10,8 +10,22 @@ export const CreateResidentRequestSchema = z.object({
   lastName: z.string(),
   dateOfBirth: z.string().datetime(),
   roomNumber: z.string(),
-  address: z.unknown(),
-  emergencyContacts: z.array(z.unknown()),
+  address: AddressSchema.optional(),
+  emergencyContacts: z.array(EmergencyContactSchema).optional(),
+});
+
+export const AddressSchema = z.object({
+  street: z.string(),
+  city: z.string(),
+  state: z.string(),
+  zipCode: z.string(),
+});
+
+export const EmergencyContactSchema = z.object({
+  name: z.string(),
+  relationship: z.string(),
+  phone: z.string(),
+  email: z.string(),
 });
 
 export const UpdateResidentRequestSchema = z.object({
@@ -19,8 +33,16 @@ export const UpdateResidentRequestSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   roomNumber: z.string(),
-  address: z.unknown(),
-  preferences: z.unknown(),
+  address: AddressSchema.optional(),
+  preferences: ResidentPreferencesSchema.optional(),
+});
+
+export const ResidentPreferencesSchema = z.object({
+  dietaryRestrictions: z.string(),
+  mobilityAids: z.string(),
+  communicationPreferences: z.string(),
+  prefersMorningCare: z.boolean(),
+  prefersEveningCare: z.boolean(),
 });
 
 export const ListMedicationsRequestSchema = z.object({
@@ -37,23 +59,29 @@ export const AddMedicationRequestSchema = z.object({
   residentId: z.number().int(),
   drugName: z.string(),
   genericName: z.string(),
-  prescribedDosage: z.unknown(),
+  prescribedDosage: DosageSchema.optional(),
   route: z.nativeEnum(MedicationRoute),
-  administrationTimes: z.array(z.nativeEnum(AdministrationTime)),
+  administrationTimes: z.array(z.nativeEnum(AdministrationTime)).optional(),
   frequencyDescription: z.string(),
   startDate: z.string().datetime(),
-  endDate: z.string().datetime().nullable(),
+  endDate: z.string().datetime().nullable().optional(),
   prescriber: z.string(),
   pharmacy: z.string(),
   purpose: z.string(),
-  warnings: z.array(z.string()),
+  warnings: z.array(z.string()).optional(),
+});
+
+export const DosageSchema = z.object({
+  amount: z.number(),
+  unit: z.string(),
+  specialInstructions: z.string(),
 });
 
 export const RecordAdministrationRequestSchema = z.object({
   residentId: z.number().int(),
   medicationId: z.number().int(),
   administeredAt: z.string().datetime(),
-  dosageGiven: z.unknown(),
+  dosageGiven: DosageSchema.optional(),
   notes: z.string(),
   wasRefused: z.boolean(),
   refusalReason: z.string(),
@@ -69,14 +97,20 @@ export const AddCareGoalRequestSchema = z.object({
   description: z.string(),
   targetOutcome: z.string(),
   targetDate: z.string().datetime(),
-  interventions: z.array(z.unknown()),
+  interventions: z.array(InterventionRequestSchema).optional(),
+});
+
+export const InterventionRequestSchema = z.object({
+  description: z.string(),
+  frequency: z.nativeEnum(InterventionFrequency),
+  responsibleRole: z.string(),
+  specialInstructions: z.string(),
 });
 
 export const AddAssessmentRequestSchema = z.object({
   residentId: z.number().int(),
   type: z.nativeEnum(AssessmentType),
   assessmentDate: z.string().datetime(),
-  findings: z.record(z.string(), z.string()),
-  recommendations: z.array(z.string()),
+  findings: z.record(z.string(), z.string()).optional(),
+  recommendations: z.array(z.string()).optional(),
 });
-

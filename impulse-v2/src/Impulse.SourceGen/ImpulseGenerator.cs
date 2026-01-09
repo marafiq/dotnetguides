@@ -1,18 +1,24 @@
 using System.Reflection;
-using System.Text;
-using System.Text.Json;
 using Impulse.Core;
+using Impulse.SourceGen.Analyzers;
+using Impulse.SourceGen.Ast;
+using Impulse.SourceGen.Emitters;
+using Impulse.SourceGen.Plugins;
 
 namespace Impulse.SourceGen;
 
 /// <summary>
 /// CLI tool that extracts TypeScript types, Zod schemas, and route definitions
-/// from compiled Impulse assemblies.
+/// from compiled Impulse assemblies using AST-based code generation.
 ///
 /// Usage: impulse-gen [assembly-path] [output-dir]
 /// </summary>
 public static class ImpulseGenerator
 {
+    private static readonly List<ITsPlugin> _tsPlugins = new();
+    private static readonly List<IZodPlugin> _zodPlugins = new();
+    private static readonly List<IRoutePlugin> _routePlugins = new();
+
     public static int Main(string[] args)
     {
         if (args.Length < 2)
@@ -34,6 +40,8 @@ public static class ImpulseGenerator
         {
             Directory.CreateDirectory(outputDir);
             var assembly = Assembly.LoadFrom(assemblyPath);
+
+            // Discover endpoints
             var endpoints = DiscoverEndpoints(assembly);
 
             if (endpoints.Count == 0)
@@ -48,10 +56,52 @@ public static class ImpulseGenerator
                 Console.WriteLine($"  - [{ep.Method}] {ep.Name}: {ep.Route}");
             }
 
-            // Generate outputs
-            GenerateRoutes(endpoints, outputDir);
-            GenerateTypeScript(endpoints, outputDir);
-            GenerateZodSchemas(endpoints, outputDir);
+            // Build route AST
+            var routeFile = BuildRouteAst(endpoints);
+
+            // Apply route plugins
+            foreach (var plugin in _routePlugins.OrderBy(p => p.Priority))
+            {
+                routeFile = plugin.Transform(routeFile);
+            }
+
+            // Generate route files
+            GenerateRouteFiles(routeFile, outputDir);
+
+            // Build and emit TypeScript types
+            var types = endpoints
+                .SelectMany(e => new[] { e.RequestType, e.ResponseType })
+                .Where(t => t != null)
+                .Cast<Type>()
+                .GetAllReferencedTypes()
+                .ToList();
+
+            var typeAnalyzer = new TypeAnalyzer();
+            var tsAst = typeAnalyzer.AnalyzeToTypeScript(types);
+
+            // Apply TypeScript plugins
+            foreach (var plugin in _tsPlugins.OrderBy(p => p.Priority))
+            {
+                tsAst = plugin.Transform(tsAst);
+            }
+
+            var tsEmitter = new TsEmitter();
+            var typesCode = EmitTypesFile(tsAst, tsEmitter);
+            File.WriteAllText(Path.Combine(outputDir, "types.ts"), typesCode);
+
+            // Build and emit Zod schemas
+            var zodAst = typeAnalyzer.AnalyzeToZod(
+                endpoints.Where(e => e.RequestType != null).Select(e => e.RequestType!));
+
+            // Apply Zod plugins
+            foreach (var plugin in _zodPlugins.OrderBy(p => p.Priority))
+            {
+                zodAst = plugin.Transform(zodAst);
+            }
+
+            var zodEmitter = new ZodEmitter();
+            var validationCode = zodEmitter.Emit(zodAst);
+            File.WriteAllText(Path.Combine(outputDir, "validation.ts"), validationCode);
 
             Console.WriteLine($"\nGenerated files in {outputDir}");
             return 0;
@@ -62,6 +112,21 @@ public static class ImpulseGenerator
             return 1;
         }
     }
+
+    /// <summary>
+    /// Register a TypeScript AST plugin.
+    /// </summary>
+    public static void RegisterPlugin(ITsPlugin plugin) => _tsPlugins.Add(plugin);
+
+    /// <summary>
+    /// Register a Zod AST plugin.
+    /// </summary>
+    public static void RegisterPlugin(IZodPlugin plugin) => _zodPlugins.Add(plugin);
+
+    /// <summary>
+    /// Register a Route AST plugin.
+    /// </summary>
+    public static void RegisterPlugin(IRoutePlugin plugin) => _routePlugins.Add(plugin);
 
     private static List<EndpointInfo> DiscoverEndpoints(Assembly assembly)
     {
@@ -100,455 +165,115 @@ public static class ImpulseGenerator
                 baseType = baseType.BaseType;
             }
 
+            // Check for deferred configurations
+            var deferred = DeferredExtensions.GetDeferredConfigs(type)
+                .Select(d => new DeferredRoute(d.Key, d.Path, d.ResponseType.Name))
+                .ToList();
+
             endpoints.Add(new EndpointInfo(
                 Name: type.Name,
                 FullName: type.FullName ?? type.Name,
                 Route: attr.Route,
-                Method: attr.Method,
+                Method: MapMethod(attr.Method),
                 RequestType: requestType,
-                ResponseType: responseType));
+                ResponseType: responseType,
+                Deferred: deferred));
         }
 
         return endpoints;
     }
 
-    private static void GenerateRoutes(List<EndpointInfo> endpoints, string outputDir)
+    private static Ast.HttpMethod MapMethod(ImpulseMethod method) => method switch
     {
-        // Generate RoutePaths.ts - constants for use in links
-        var pathsSb = new StringBuilder();
-        pathsSb.AppendLine("// Auto-generated by impulse-gen - DO NOT EDIT");
-        pathsSb.AppendLine();
-        pathsSb.AppendLine("/**");
-        pathsSb.AppendLine(" * Type-safe route path constants.");
-        pathsSb.AppendLine(" * Use these for Link components and navigation.");
-        pathsSb.AppendLine(" */");
-        pathsSb.AppendLine("export const RoutePaths = {");
-        foreach (var ep in endpoints)
-        {
-            var key = ep.Name.Replace("Endpoint", "");
-            pathsSb.AppendLine($"  {key}: '{ep.Route}' as const,");
-        }
-        pathsSb.AppendLine("} as const;");
-        pathsSb.AppendLine();
-        pathsSb.AppendLine("export type RoutePath = typeof RoutePaths[keyof typeof RoutePaths];");
-        File.WriteAllText(Path.Combine(outputDir, "routePaths.ts"), pathsSb.ToString());
+        ImpulseMethod.Get => Ast.HttpMethod.Get,
+        ImpulseMethod.Post => Ast.HttpMethod.Post,
+        ImpulseMethod.Put => Ast.HttpMethod.Put,
+        ImpulseMethod.Patch => Ast.HttpMethod.Patch,
+        ImpulseMethod.Delete => Ast.HttpMethod.Delete,
+        _ => Ast.HttpMethod.Get
+    };
 
-        // Generate TanStack Router virtual routes (single file, not file-based)
-        GenerateVirtualRoutes(endpoints, outputDir);
-
-        // Generate loaders.ts - typed loader functions
-        GenerateLoaders(endpoints, outputDir);
-
-        // Generate mutations.ts - typed mutation functions
-        GenerateMutations(endpoints, outputDir);
-    }
-
-    private static void GenerateVirtualRoutes(List<EndpointInfo> endpoints, string outputDir)
+    private static RouteFile BuildRouteAst(List<EndpointInfo> endpoints)
     {
-        var sb = new StringBuilder();
-        var queryEndpoints = endpoints.Where(e => e.IsQuery).ToList();
-
-        sb.AppendLine("// Auto-generated by impulse-gen - DO NOT EDIT");
-        sb.AppendLine("// Virtual file routes for TanStack Router");
-        sb.AppendLine("import { createRoute, createRootRoute, createRouter } from '@tanstack/react-router';");
-        sb.AppendLine("import { RoutePaths } from './routePaths';");
-
-        // Import all response types
-        var responseTypes = queryEndpoints
-            .Where(e => e.ResponseType != null)
-            .Select(e => e.ResponseType!.Name)
-            .Distinct()
-            .ToList();
-
-        if (responseTypes.Any())
+        var routes = endpoints.Select(ep =>
         {
-            sb.AppendLine($"import type {{ {string.Join(", ", responseTypes)} }} from './types';");
-        }
+            var name = ep.Name;
+            var route = new RouteDefinition(
+                name,
+                ep.Route,
+                ep.Method,
+                ep.ResponseType?.Name,
+                ep.RequestType?.Name);
 
-        sb.AppendLine();
-        sb.AppendLine("// Context type for impulse loader");
-        sb.AppendLine("interface ImpulseContext {");
-        sb.AppendLine("  impulse: <T>(url: string) => Promise<T>;");
-        sb.AppendLine("}");
-        sb.AppendLine();
-
-        sb.AppendLine("// Root route");
-        sb.AppendLine("export const rootRoute = createRootRoute();");
-        sb.AppendLine();
-
-        // Generate individual route definitions
-        foreach (var ep in queryEndpoints)
-        {
-            var routeName = ep.Name.Replace("Endpoint", "");
-            var routeVarName = ToCamelCase(routeName) + "Route";
-            var responseName = ep.ResponseType?.Name ?? "unknown";
-            var hasParams = ep.Route.Contains('{');
-            var tanstackPath = ep.Route.Replace("{", "$").Replace("}", "");
-
-            sb.AppendLine($"export const {routeVarName} = createRoute({{");
-            sb.AppendLine("  getParentRoute: () => rootRoute,");
-            sb.AppendLine($"  path: '{tanstackPath}',");
-
-            if (ep.ResponseType != null)
+            // Add deferred routes
+            foreach (var deferred in ep.Deferred)
             {
-                sb.AppendLine("  loader: async ({ context, params }) => {");
-                sb.AppendLine("    const ctx = context as ImpulseContext;");
-
-                if (hasParams)
-                {
-                    var paramNames = ExtractRouteParams(ep.Route);
-                    sb.AppendLine($"    let url: string = RoutePaths.{routeName};");
-                    foreach (var param in paramNames)
-                    {
-                        sb.AppendLine($"    url = url.replace('{{{param}}}', params.{param});");
-                    }
-                    sb.AppendLine($"    return ctx.impulse<{responseName}>(url);");
-                }
-                else
-                {
-                    sb.AppendLine($"    return ctx.impulse<{responseName}>(RoutePaths.{routeName});");
-                }
-                sb.AppendLine("  },");
+                route = route.WithDeferred(deferred.Key, deferred.Path, deferred.ResponseType);
             }
 
-            sb.AppendLine("});");
-            sb.AppendLine();
-        }
+            return route;
+        }).ToList();
 
-        // Generate route tree
-        sb.AppendLine("// Route tree - add all routes as children of root");
-        sb.AppendLine("export const routeTree = rootRoute.addChildren([");
-        foreach (var ep in queryEndpoints)
+        return new RouteFile(routes);
+    }
+
+    private static void GenerateRouteFiles(RouteFile routeFile, string outputDir)
+    {
+        var emitter = new RouteEmitter();
+
+        // Generate routePaths.ts
+        var routePathsCode = emitter.EmitRoutePaths(routeFile);
+        File.WriteAllText(Path.Combine(outputDir, "routePaths.ts"), routePathsCode);
+
+        // Generate routes.ts (virtual TanStack Router routes)
+        var routesCode = emitter.EmitVirtualRoutes(routeFile);
+        File.WriteAllText(Path.Combine(outputDir, "routes.ts"), routesCode);
+
+        // Generate loaders.ts
+        var loadersCode = emitter.EmitLoaders(routeFile);
+        File.WriteAllText(Path.Combine(outputDir, "loaders.ts"), loadersCode);
+
+        // Generate mutations.ts
+        var mutationsCode = emitter.EmitMutations(routeFile);
+        File.WriteAllText(Path.Combine(outputDir, "mutations.ts"), mutationsCode);
+
+        // Clean up old file-based routes directory if it exists
+        var oldRoutesDir = Path.Combine(outputDir, "routes");
+        if (Directory.Exists(oldRoutesDir))
         {
-            var routeName = ep.Name.Replace("Endpoint", "");
-            var routeVarName = ToCamelCase(routeName) + "Route";
-            sb.AppendLine($"  {routeVarName},");
-        }
-        sb.AppendLine("]);");
-        sb.AppendLine();
-
-        // Generate router
-        sb.AppendLine("// Create the router instance");
-        sb.AppendLine("export const router = createRouter({ routeTree });");
-        sb.AppendLine();
-
-        // Generate type-safe route object (as in architecture)
-        sb.AppendLine("// Route definitions object for programmatic access");
-        sb.AppendLine("export const routes = {");
-        foreach (var ep in queryEndpoints)
-        {
-            var routeName = ep.Name.Replace("Endpoint", "");
-            var routeKey = ToCamelCase(routeName);
-            var responseName = ep.ResponseType?.Name ?? "unknown";
-
-            sb.AppendLine($"  {routeKey}: {{");
-            sb.AppendLine($"    path: '{ep.Route}' as const,");
-            sb.AppendLine($"    method: 'GET' as const,");
-            sb.AppendLine($"    loader: RoutePaths.{routeName},");
-            sb.AppendLine("  },");
-        }
-        sb.AppendLine("} as const;");
-        sb.AppendLine();
-
-        // Generate type-safe path builders
-        sb.AppendLine("// Type-safe path builders");
-        foreach (var ep in queryEndpoints)
-        {
-            var routeName = ep.Name.Replace("Endpoint", "");
-            var hasParams = ep.Route.Contains('{');
-
-            if (hasParams)
-            {
-                var paramNames = ExtractRouteParams(ep.Route);
-                var funcName = ToCamelCase(routeName) + "Path";
-                var paramsSignature = string.Join(", ", paramNames.Select(p => $"{p}: string | number"));
-
-                sb.AppendLine($"export function {funcName}({paramsSignature}) {{");
-                sb.Append($"  return `");
-                var path = ep.Route;
-                foreach (var param in paramNames)
-                {
-                    path = path.Replace($"{{{param}}}", $"${{{param}}}");
-                }
-                sb.Append(path);
-                sb.AppendLine("` as const;");
-                sb.AppendLine("}");
-            }
-        }
-
-        File.WriteAllText(Path.Combine(outputDir, "routes.ts"), sb.ToString());
-
-        // Clean up old file-based routes directory
-        var routesDir = Path.Combine(outputDir, "routes");
-        if (Directory.Exists(routesDir))
-        {
-            Directory.Delete(routesDir, recursive: true);
+            Directory.Delete(oldRoutesDir, recursive: true);
         }
     }
 
-    private static string ToCamelCase(string name)
+    private static string EmitTypesFile(TsFile ast, TsEmitter emitter)
     {
-        if (string.IsNullOrEmpty(name)) return name;
-        return char.ToLowerInvariant(name[0]) + name.Substring(1);
-    }
-
-    private static void GenerateLoaders(List<EndpointInfo> endpoints, string outputDir)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("// Auto-generated by impulse-gen - DO NOT EDIT");
-        sb.AppendLine("import type { ImpulseContext } from '@impulse/react';");
-        sb.AppendLine("import { RoutePaths } from './routePaths';");
-        sb.AppendLine("import * as Types from './types';");
-        sb.AppendLine();
-        sb.AppendLine("/**");
-        sb.AppendLine(" * Type-safe loader functions for GET endpoints.");
-        sb.AppendLine(" * Use these in your route loaders.");
-        sb.AppendLine(" */");
-        sb.AppendLine("export const Loaders = {");
-
-        // Only generate loaders for GET endpoints
-        foreach (var ep in endpoints.Where(e => e.IsQuery && e.ResponseType != null))
-        {
-            var name = ep.Name.Replace("Endpoint", "");
-            var responseName = ep.ResponseType!.Name;
-            var hasParams = ep.Route.Contains('{');
-
-            sb.AppendLine($"  /** GET {ep.Route} */");
-            if (hasParams)
-            {
-                var paramNames = ExtractRouteParams(ep.Route);
-                var paramsType = string.Join(", ", paramNames.Select(p => $"{p}: string"));
-                sb.AppendLine($"  {name}: async (ctx: ImpulseContext, params: {{ {paramsType} }}): Promise<Types.{responseName}> => {{");
-                sb.AppendLine($"    let url: string = RoutePaths.{name};");
-                foreach (var param in paramNames)
-                {
-                    sb.AppendLine($"    url = url.replace('{{{param}}}', params.{param});");
-                }
-                sb.AppendLine("    return ctx.impulse<Types." + responseName + ">(url);");
-            }
-            else
-            {
-                sb.AppendLine($"  {name}: async (ctx: ImpulseContext): Promise<Types.{responseName}> => {{");
-                sb.AppendLine($"    return ctx.impulse<Types.{responseName}>(RoutePaths.{name});");
-            }
-            sb.AppendLine("  },");
-            sb.AppendLine();
-        }
-
-        sb.AppendLine("} as const;");
-        File.WriteAllText(Path.Combine(outputDir, "loaders.ts"), sb.ToString());
-    }
-
-    private static void GenerateMutations(List<EndpointInfo> endpoints, string outputDir)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("// Auto-generated by impulse-gen - DO NOT EDIT");
-        sb.AppendLine("import { useMutation } from '@tanstack/react-query';");
-        sb.AppendLine("import { useRouter } from '@tanstack/react-router';");
-        sb.AppendLine("import type { ImpulseContext } from '@impulse/react';");
-        sb.AppendLine("import { RoutePaths } from './routePaths';");
-        sb.AppendLine("import * as Types from './types';");
-        sb.AppendLine("import * as Schemas from './validation';");
-        sb.AppendLine();
-
-        // Only generate mutations for POST/PUT/PATCH/DELETE endpoints
-        foreach (var ep in endpoints.Where(e => e.IsMutation && e.RequestType != null))
-        {
-            var name = ep.Name.Replace("Endpoint", "");
-            var requestName = ep.RequestType!.Name;
-            var responseName = ep.ResponseType?.Name ?? "void";
-            var schemaName = $"{requestName}Schema";
-            var httpMethod = ep.Method.ToString().ToUpperInvariant();
-
-            sb.AppendLine($"/**");
-            sb.AppendLine($" * Mutation hook for {name}");
-            sb.AppendLine($" * {httpMethod} {ep.Route}");
-            sb.AppendLine($" */");
-            sb.AppendLine($"export function use{name}Mutation(ctx: ImpulseContext) {{");
-            sb.AppendLine("  const router = useRouter();");
-            sb.AppendLine();
-            sb.AppendLine($"  return useMutation({{");
-            sb.AppendLine($"    mutationFn: async (data: Types.{requestName}) => {{");
-            sb.AppendLine($"      // Validate with Zod before sending");
-            sb.AppendLine($"      const validated = Schemas.{schemaName}.parse(data);");
-            sb.AppendLine($"      return ctx.impulseMutate<Types.{requestName}, Types.{responseName}>(");
-            sb.AppendLine($"        RoutePaths.{name},");
-            sb.AppendLine($"        validated,");
-            sb.AppendLine($"        '{httpMethod}'");
-            sb.AppendLine($"      );");
-            sb.AppendLine($"    }},");
-            sb.AppendLine($"    onSuccess: async () => {{");
-            sb.AppendLine($"      // Invalidate and refetch related queries");
-            sb.AppendLine($"      await router.invalidate();");
-            sb.AppendLine($"    }},");
-            sb.AppendLine($"  }});");
-            sb.AppendLine($"}}");
-            sb.AppendLine();
-        }
-
-        File.WriteAllText(Path.Combine(outputDir, "mutations.ts"), sb.ToString());
-    }
-
-    private static string RouteToFileName(string route)
-    {
-        // Convert /residents/{id} to residents.$id.tsx
-        var fileName = route
-            .TrimStart('/')
-            .Replace("{", "$")
-            .Replace("}", "")
-            .Replace("/", ".");
-
-        return fileName + ".tsx";
-    }
-
-    private static List<string> ExtractRouteParams(string route)
-    {
-        var matches = System.Text.RegularExpressions.Regex.Matches(route, @"\{(\w+)\}");
-        return matches.Select(m => m.Groups[1].Value).ToList();
-    }
-
-    private static void GenerateTypeScript(List<EndpointInfo> endpoints, string outputDir)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("// Auto-generated by impulse-gen - DO NOT EDIT");
-        sb.AppendLine();
-
-        foreach (var ep in endpoints)
-        {
-            if (ep.RequestType != null)
-            {
-                sb.AppendLine($"export interface {ep.RequestType.Name} {{");
-                foreach (var prop in ep.RequestType.GetProperties())
-                {
-                    var tsType = GetTypeScriptType(prop.PropertyType);
-                    var optional = IsNullable(prop.PropertyType) ? "?" : "";
-                    sb.AppendLine($"  {ToCamelCase(prop.Name)}{optional}: {tsType};");
-                }
-                sb.AppendLine("}");
-                sb.AppendLine();
-            }
-
-            if (ep.ResponseType != null)
-            {
-                sb.AppendLine($"export interface {ep.ResponseType.Name} {{");
-                foreach (var prop in ep.ResponseType.GetProperties())
-                {
-                    var tsType = GetTypeScriptType(prop.PropertyType);
-                    var optional = IsNullable(prop.PropertyType) ? "?" : "";
-                    sb.AppendLine($"  {ToCamelCase(prop.Name)}{optional}: {tsType};");
-                }
-                sb.AppendLine("}");
-                sb.AppendLine();
-            }
-        }
-
-        File.WriteAllText(Path.Combine(outputDir, "types.ts"), sb.ToString());
-    }
-
-    private static void GenerateZodSchemas(List<EndpointInfo> endpoints, string outputDir)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine("// Auto-generated by impulse-gen - DO NOT EDIT");
-        sb.AppendLine("import { z } from 'zod';");
-        sb.AppendLine();
-
-        foreach (var ep in endpoints)
-        {
-            if (ep.RequestType != null)
-            {
-                sb.AppendLine($"export const {ep.RequestType.Name}Schema = z.object({{");
-                foreach (var prop in ep.RequestType.GetProperties())
-                {
-                    var zodType = GetZodType(prop.PropertyType);
-                    sb.AppendLine($"  {ToCamelCase(prop.Name)}: {zodType},");
-                }
-                sb.AppendLine("});");
-                sb.AppendLine();
-            }
-        }
-
-        File.WriteAllText(Path.Combine(outputDir, "validation.ts"), sb.ToString());
-    }
-
-    private static string GetTypeScriptType(Type type)
-    {
-        var underlying = Nullable.GetUnderlyingType(type) ?? type;
-
-        if (underlying == typeof(string)) return "string";
-        if (underlying == typeof(int) || underlying == typeof(long) ||
-            underlying == typeof(float) || underlying == typeof(double) ||
-            underlying == typeof(decimal)) return "number";
-        if (underlying == typeof(bool)) return "boolean";
-        if (underlying == typeof(DateTime) || underlying == typeof(DateTimeOffset)) return "string";
-        if (underlying == typeof(Guid)) return "string";
-        if (underlying.IsArray) return $"{GetTypeScriptType(underlying.GetElementType()!)}[]";
-        if (underlying.IsGenericType)
-        {
-            var genericDef = underlying.GetGenericTypeDefinition();
-            if (genericDef == typeof(List<>))
-                return $"{GetTypeScriptType(underlying.GetGenericArguments()[0])}[]";
-            if (genericDef == typeof(Dictionary<,>))
-            {
-                var keyType = GetTypeScriptType(underlying.GetGenericArguments()[0]);
-                var valueType = GetTypeScriptType(underlying.GetGenericArguments()[1]);
-                return $"Record<{keyType}, {valueType}>";
-            }
-        }
-        if (underlying.IsEnum)
-            return underlying.Name;
-
-        return underlying.Name;
-    }
-
-    private static string GetZodType(Type type)
-    {
-        var underlying = Nullable.GetUnderlyingType(type);
-        var isNullable = underlying != null;
-        var baseType = underlying ?? type;
-
-        string zodBase;
-        if (baseType == typeof(string)) zodBase = "z.string()";
-        else if (baseType == typeof(int) || baseType == typeof(long)) zodBase = "z.number().int()";
-        else if (baseType == typeof(float) || baseType == typeof(double) || baseType == typeof(decimal))
-            zodBase = "z.number()";
-        else if (baseType == typeof(bool)) zodBase = "z.boolean()";
-        else if (baseType == typeof(DateTime) || baseType == typeof(DateTimeOffset))
-            zodBase = "z.string().datetime()";
-        else if (baseType == typeof(Guid)) zodBase = "z.string().uuid()";
-        else if (baseType.IsArray)
-            zodBase = $"z.array({GetZodType(baseType.GetElementType()!)})";
-        else if (baseType.IsGenericType)
-        {
-            var genericDef = baseType.GetGenericTypeDefinition();
-            if (genericDef == typeof(List<>))
-                zodBase = $"z.array({GetZodType(baseType.GetGenericArguments()[0])})";
-            else if (genericDef == typeof(Dictionary<,>))
-                zodBase = $"z.record({GetZodType(baseType.GetGenericArguments()[0])}, {GetZodType(baseType.GetGenericArguments()[1])})";
-            else
-                zodBase = "z.unknown()";
-        }
-        else if (baseType.IsEnum)
-            zodBase = $"z.nativeEnum({baseType.Name})";
-        else zodBase = "z.unknown()";
-
-        return isNullable ? $"{zodBase}.nullable()" : zodBase;
-    }
-
-    private static bool IsNullable(Type type)
-    {
-        return Nullable.GetUnderlyingType(type) != null ||
-               !type.IsValueType;
+        var header = "// Auto-generated by impulse-gen - DO NOT EDIT\n\n";
+        return header + emitter.Emit(ast);
     }
 }
 
+/// <summary>
+/// Internal endpoint information record.
+/// </summary>
 internal record EndpointInfo(
     string Name,
     string FullName,
     string Route,
-    ImpulseMethod Method,
+    Ast.HttpMethod Method,
     Type? RequestType,
-    Type? ResponseType)
+    Type? ResponseType,
+    IReadOnlyList<DeferredRoute> Deferred)
 {
-    public bool IsQuery => Method == ImpulseMethod.Get;
-    public bool IsMutation => Method is ImpulseMethod.Post or ImpulseMethod.Put or ImpulseMethod.Patch or ImpulseMethod.Delete;
+    public EndpointInfo(
+        string name,
+        string fullName,
+        string route,
+        Ast.HttpMethod method,
+        Type? requestType,
+        Type? responseType)
+        : this(name, fullName, route, method, requestType, responseType,
+               Array.Empty<DeferredRoute>()) { }
+
+    public bool IsQuery => Method == Ast.HttpMethod.Get;
+    public bool IsMutation => Method is Ast.HttpMethod.Post or Ast.HttpMethod.Put or Ast.HttpMethod.Patch or Ast.HttpMethod.Delete;
 }
