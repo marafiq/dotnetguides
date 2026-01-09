@@ -39,9 +39,12 @@ export default defineConfig({
     },
   },
   server: {
-    proxy: {
-      '/residents': 'http://localhost:5000',
-      '/api': 'http://localhost:5000',
-    },
+    // Proxy disabled for preview mode - mock data in impulse-runtime.ts
+    // Enable when running with backend:
+    // proxy: {
+    //   '/residents': 'http://localhost:5000',
+    //   '/api': 'http://localhost:5000',
+    //   '/dashboard': 'http://localhost:5000',
+    // },
   },
 });
