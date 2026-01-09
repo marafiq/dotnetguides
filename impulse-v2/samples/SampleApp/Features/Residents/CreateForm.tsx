@@ -331,10 +331,13 @@ export function CreateResidentPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="app-main">
-      <div className="page-header">
-        <Heading level={1}>New Resident</Heading>
-      </div>
+    <div className="form-container">
+      <header className="form-header">
+        <Heading level={1} UNSAFE_className="form-title">New Resident</Heading>
+        <Text UNSAFE_className="form-subtitle">
+          Create a new resident profile for your facility
+        </Text>
+      </header>
       <CreateResidentForm
         onCancel={() => navigate({ to: '/residents' })}
         onSuccess={(id) => navigate({ to: `/residents/${id}` })}

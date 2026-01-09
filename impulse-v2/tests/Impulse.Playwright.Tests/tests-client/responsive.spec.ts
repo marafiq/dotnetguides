@@ -34,6 +34,17 @@ test.describe('Responsive Design', () => {
     });
   });
 
+  test('Create form renders correctly on desktop (1920px)', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto('/residents/new');
+    await page.waitForTimeout(2000);
+
+    await page.screenshot({
+      path: 'test-results-client/create-form-desktop.png',
+      fullPage: true
+    });
+  });
+
   test('Dashboard renders correctly on mobile (375px)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 }); // iPhone X
     await page.goto('/dashboard');

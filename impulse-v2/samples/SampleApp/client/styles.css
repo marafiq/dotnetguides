@@ -2,6 +2,38 @@
    Impulse v2 - Senior Living CRM Styles
    ======================================== */
 
+/* ========================================
+   CRITICAL: Global S2 Card Overrides
+   Force React Spectrum S2 Card to fill containers
+   ======================================== */
+
+/* Target S2 Card root element */
+[class*="Card_root"],
+[class*="card_root"],
+[data-react-spectrum-card] {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
+/* Target any S2 card-like containers */
+.dashboard-card,
+.form-card,
+.info-card,
+.resident-card,
+.impulse-card {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
+/* Ensure card children expand */
+.dashboard-card > *,
+.form-card > *,
+.form-card form {
+  width: 100%;
+}
+
 :root {
   --color-primary: #2563eb;
   --color-primary-dark: #1d4ed8;
@@ -1003,7 +1035,7 @@ h4 {
 /* Main Grid Layout - Desktop First */
 .dashboard-main {
   display: grid;
-  grid-template-columns: 1fr 400px;
+  grid-template-columns: 1fr 420px;
   gap: 28px;
   align-items: start;
 }
@@ -1024,6 +1056,13 @@ h4 {
 .alerts-card,
 .tasks-card {
   min-height: 500px;
+}
+
+/* CRITICAL: Force S2 Card to fill container */
+.dashboard-card {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
 }
 
 /* Card Base Styles - Larger Desktop Cards */
@@ -2234,41 +2273,45 @@ h4 {
 }
 
 /* ========================================
-   NEW Form Styles - Modern S2 Design
+   NEW Form Styles - Enterprise Desktop Design
    ======================================== */
 
 .form-container {
-  max-width: 700px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 32px 40px;
 }
 
 .form-header {
-  margin-bottom: 32px;
+  margin-bottom: 40px;
 }
 
 .form-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
+  font-size: 36px;
+  font-weight: 800;
+  color: #0f172a;
   margin: 0 0 8px 0;
 }
 
 .form-subtitle {
-  font-size: 16px;
-  color: #6b7280;
+  font-size: 15px;
+  color: #64748b;
 }
 
+/* CRITICAL: Force S2 Card to be full width for forms */
 .form-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
   background: white;
   border-radius: 20px;
-  padding: 32px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  border: 1px solid #f1f5f9;
+  padding: 40px 48px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid #e2e8f0;
 }
 
 .form-section {
-  margin-bottom: 32px;
+  margin-bottom: 36px;
 }
 
 .form-section:last-child {
@@ -2277,38 +2320,67 @@ h4 {
 
 .form-section-title {
   font-size: 14px;
-  font-weight: 600;
-  color: #6b7280;
+  font-weight: 700;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 16px;
-  padding-bottom: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
   border-bottom: 2px solid #f1f5f9;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  gap: 24px;
 }
 
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .form-field.full-width {
   grid-column: span 2;
 }
 
+/* Form row - side by side fields */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.form-row > * {
+  flex: 1;
+  min-width: 0;
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid #f1f5f9;
+  gap: 16px;
+  margin-top: 40px;
+  padding-top: 28px;
+  border-top: 2px solid #f1f5f9;
+}
+
+/* Force S2 TextField to expand */
+.form-card [class*="TextField"],
+.form-card [class*="textfield"] {
+  width: 100% !important;
+}
+
+@media (max-width: 1024px) {
+  .form-container {
+    padding: 24px;
+  }
+
+  .form-card {
+    padding: 32px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -2317,10 +2389,11 @@ h4 {
   }
 
   .form-card {
-    padding: 20px;
+    padding: 24px;
   }
 
-  .form-grid {
+  .form-grid,
+  .form-row {
     grid-template-columns: 1fr;
   }
 
