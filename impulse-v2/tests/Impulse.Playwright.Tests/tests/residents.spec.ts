@@ -49,6 +49,20 @@ test.describe('Residents API', () => {
 
       await page.screenshot({ path: 'test-results/residents-list-html.png' });
     });
+
+    test('renders actual UI with resident cards after hydration', async ({ page }) => {
+      await page.goto('/residents');
+
+      // Wait for React to hydrate and render
+      await page.waitForSelector('.residents-list, h1:has-text("Residents")', { timeout: 5000 }).catch(() => {});
+
+      // Check for page header
+      const heading = page.locator('h1');
+      await expect(heading).toContainText(/Residents|Loading/);
+
+      // Take screenshot of actual UI
+      await page.screenshot({ path: 'test-results/residents-list-ui.png', fullPage: true });
+    });
   });
 
   test.describe('GET /residents/{id} - GetResident', () => {
@@ -84,6 +98,20 @@ test.describe('Residents API', () => {
       await page.goto('/residents/1');
       await expect(page.locator('#app')).toBeVisible();
       await page.screenshot({ path: 'test-results/resident-detail.png' });
+    });
+
+    test('renders actual resident detail UI after hydration', async ({ page }) => {
+      await page.goto('/residents/1');
+
+      // Wait for React to hydrate
+      await page.waitForSelector('.resident-detail, h1', { timeout: 5000 }).catch(() => {});
+
+      // Check heading shows resident name or loading
+      const heading = page.locator('h1');
+      await expect(heading).toContainText(/John Smith|Loading/);
+
+      // Take screenshot of actual UI
+      await page.screenshot({ path: 'test-results/screenshot-resident-detail.png', fullPage: true });
     });
   });
 

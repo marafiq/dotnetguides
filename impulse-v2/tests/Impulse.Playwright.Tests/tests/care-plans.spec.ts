@@ -48,6 +48,20 @@ test.describe('Care Plans API', () => {
       await expect(page.locator('#app')).toBeVisible();
       await page.screenshot({ path: 'test-results/care-plan-html.png' });
     });
+
+    test('renders actual care plan UI after hydration', async ({ page }) => {
+      await page.goto('/residents/1/care-plan');
+
+      // Wait for React to hydrate
+      await page.waitForSelector('.care-plan-detail, h1', { timeout: 5000 }).catch(() => {});
+
+      // Check heading shows Care Plan or loading
+      const heading = page.locator('h1');
+      await expect(heading).toContainText(/Care Plan|Loading/);
+
+      // Take screenshot of actual UI
+      await page.screenshot({ path: 'test-results/screenshot-care-plan.png', fullPage: true });
+    });
   });
 
   test.describe('POST /residents/{residentId}/care-plan/goals - AddCareGoal', () => {

@@ -2,9 +2,10 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Impulse.Core;
-using SampleApp.Residents;
-using SampleApp.Medications;
-using SampleApp.CarePlans;
+// Vertical slice imports - each feature is self-contained
+using SampleApp.Features.Residents;
+using SampleApp.Features.Medications;
+using SampleApp.Features.CarePlans;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
