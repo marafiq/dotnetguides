@@ -243,58 +243,60 @@ public static class SimpleTests
 
     private static void Test_GeneratedRoutes_ImportRoutePaths()
     {
-        var routesDir = FindGeneratedRoutesDir();
-        Assert(routesDir != null, "generated/routes directory should exist");
+        var routesPath = FindGeneratedFile("routes.ts");
+        Assert(routesPath != null, "routes.ts should exist in generated folder");
 
-        var routeFiles = Directory.GetFiles(routesDir!, "*.tsx");
-        Assert(routeFiles.Length > 0, "Should have generated route files");
-
-        foreach (var routeFile in routeFiles)
-        {
-            var content = File.ReadAllText(routeFile);
-            Assert(content.Contains("import { RoutePaths }") || content.Contains("import {RoutePaths}"),
-                $"{Path.GetFileName(routeFile)} must import RoutePaths - zero magic strings rule");
-        }
+        var content = File.ReadAllText(routesPath!);
+        Assert(content.Contains("import { RoutePaths }") || content.Contains("import {RoutePaths}"),
+            "routes.ts must import RoutePaths - zero magic strings rule");
     }
 
     private static void Test_GeneratedRoutes_UseRoutePaths_NotMagicStrings()
     {
-        var routesDir = FindGeneratedRoutesDir();
-        Assert(routesDir != null, "generated/routes directory should exist");
+        var routesPath = FindGeneratedFile("routes.ts");
+        Assert(routesPath != null, "routes.ts should exist");
 
-        var routeFiles = Directory.GetFiles(routesDir!, "*.tsx");
-        foreach (var routeFile in routeFiles)
-        {
-            var content = File.ReadAllText(routeFile);
+        var content = File.ReadAllText(routesPath!);
 
-            // Should use RoutePaths.X
-            Assert(content.Contains("RoutePaths."),
-                $"{Path.GetFileName(routeFile)} must use RoutePaths.X constants");
+        // Should use RoutePaths.X
+        Assert(content.Contains("RoutePaths."),
+            "routes.ts must use RoutePaths.X constants");
 
-            // Should NOT contain hardcoded route strings in impulse calls
-            var hasMagicString = System.Text.RegularExpressions.Regex.IsMatch(
-                content, @"impulse<[^>]+>\('\/");
-            Assert(!hasMagicString,
-                $"{Path.GetFileName(routeFile)} must NOT have hardcoded route strings in impulse calls");
-        }
+        // Should NOT contain hardcoded route strings in impulse calls
+        var hasMagicString = System.Text.RegularExpressions.Regex.IsMatch(
+            content, @"impulse<[^>]+>\('\/");
+        Assert(!hasMagicString,
+            "routes.ts must NOT have hardcoded route strings in impulse calls");
     }
 
-    private static string? FindGeneratedRoutesDir()
+    private static void Test_GeneratedRoutes_HasVirtualRouteTree()
     {
-        var assemblyDir = Path.GetDirectoryName(typeof(SimpleTests).Assembly.Location);
-        var searchPaths = new[]
-        {
-            Path.Combine(assemblyDir!, "..", "..", "..", "..", "..", "samples", "SampleApp", "generated", "routes"),
-            Path.Combine(assemblyDir!, "..", "..", "..", "..", "samples", "SampleApp", "generated", "routes"),
-        };
+        var routesPath = FindGeneratedFile("routes.ts");
+        Assert(routesPath != null, "routes.ts should exist");
 
-        foreach (var path in searchPaths)
-        {
-            var normalized = Path.GetFullPath(path);
-            if (Directory.Exists(normalized))
-                return normalized;
-        }
-        return null;
+        var content = File.ReadAllText(routesPath!);
+
+        // Must have TanStack Router virtual routes
+        Assert(content.Contains("createRoute"), "routes.ts must use createRoute (virtual routing)");
+        Assert(content.Contains("createRootRoute"), "routes.ts must have createRootRoute");
+        Assert(content.Contains("routeTree"), "routes.ts must export routeTree");
+        Assert(content.Contains("createRouter"), "routes.ts must create router instance");
+
+        // Must NOT use file-based routing
+        Assert(!content.Contains("createFileRoute"),
+            "routes.ts must NOT use createFileRoute (file-based) - use virtual routes");
+    }
+
+    private static void Test_GeneratedRoutes_HasTypeSafePathBuilders()
+    {
+        var routesPath = FindGeneratedFile("routes.ts");
+        Assert(routesPath != null, "routes.ts should exist");
+
+        var content = File.ReadAllText(routesPath!);
+
+        // Should have type-safe path builder functions for parameterized routes
+        Assert(content.Contains("export function") && content.Contains("Path("),
+            "routes.ts must have type-safe path builder functions");
     }
 
     private static string? FindGeneratedFile(string fileName)
