@@ -72,7 +72,8 @@ public class GetCarePlanEndpoint : ImpulseEndpoint<GetCarePlanRequest, GetCarePl
 {
     public override Task<IImpulseResult> Handle(GetCarePlanRequest request, CancellationToken ct = default)
     {
-        if (request.ResidentId <= 0)
+        // Simulated data only exists for residents 1-3
+        if (request.ResidentId <= 0 || request.ResidentId > 3)
         {
             return Task.FromResult<IImpulseResult>(ImpulseResults.NotFound("Care plan not found"));
         }
@@ -210,12 +211,18 @@ public class AddAssessmentEndpoint : ImpulseEndpoint<AddAssessmentRequest, AddAs
 {
     public override Task<IImpulseResult> Handle(AddAssessmentRequest request, CancellationToken ct = default)
     {
+        // Simulated data only exists for residents 1-3
+        if (request.ResidentId <= 0 || request.ResidentId > 3)
+        {
+            return Task.FromResult<IImpulseResult>(ImpulseResults.NotFound("Resident not found"));
+        }
+
         var errors = new Dictionary<string, string[]>();
 
         if (request.AssessmentDate > DateTime.Today)
             errors["assessmentDate"] = ["Assessment date cannot be in the future"];
 
-        if (request.Findings.Count == 0)
+        if (request.Findings == null || request.Findings.Count == 0)
             errors["findings"] = ["At least one finding is required"];
 
         if (errors.Count > 0)

@@ -111,7 +111,8 @@ public class GetMedicationEndpoint : ImpulseEndpoint<GetMedicationRequest, GetMe
 {
     public override Task<IImpulseResult> Handle(GetMedicationRequest request, CancellationToken ct = default)
     {
-        if (request.MedicationId <= 0)
+        // Simulated data only exists for medications 1-5 and residents 1-3
+        if (request.MedicationId <= 0 || request.MedicationId > 5 || request.ResidentId > 3)
         {
             return Task.FromResult<IImpulseResult>(ImpulseResults.NotFound("Medication not found"));
         }

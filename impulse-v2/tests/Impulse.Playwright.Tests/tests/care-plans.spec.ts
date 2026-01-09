@@ -62,7 +62,7 @@ test.describe('Care Plans API', () => {
           category: 'Mobility',
           description: 'Improve walking distance',
           targetOutcome: 'Walk 100 feet independently',
-          targetDate: '2024-06-01',
+          targetDate: '2027-06-01',
           interventions: [
             { description: 'Physical therapy 3x weekly', frequency: 'Weekly' },
             { description: 'Daily assisted walks', frequency: 'Daily' },
@@ -107,8 +107,8 @@ test.describe('Care Plans API', () => {
         },
         data: {
           residentId: 1,
-          type: 'FallRisk',
-          assessmentDate: '2024-01-20',
+          type: 'Quarterly', // Valid enum: Initial, Quarterly, Annual, ChangeInCondition
+          assessmentDate: new Date().toISOString().split('T')[0], // Today
           findings: {
             'gaitStability': 'Moderate impairment',
             'balanceScore': '12/28',
@@ -130,7 +130,7 @@ test.describe('Care Plans API', () => {
       expect(typeof body.assessmentId).toBe('number');
     });
 
-    test('validates assessment type enum', async ({ request }) => {
+    test('rejects invalid assessment type enum', async ({ request }) => {
       const response = await request.post('/residents/1/care-plan/assessments', {
         headers: {
           'Content-Type': 'application/json',
@@ -138,12 +138,13 @@ test.describe('Care Plans API', () => {
         },
         data: {
           residentId: 1,
-          type: 'InvalidType', // Invalid enum value
-          assessmentDate: '2024-01-20',
+          type: 'InvalidType', // Invalid enum - causes JSON deserialization failure
+          assessmentDate: new Date().toISOString().split('T')[0],
         },
       });
 
-      expect(response.status()).toBe(422);
+      // Invalid enum causes JSON parse error, returns 400
+      expect(response.status()).toBe(400);
     });
 
     test('returns 404 for non-existent resident', async ({ request }) => {
@@ -154,8 +155,9 @@ test.describe('Care Plans API', () => {
         },
         data: {
           residentId: 999999,
-          type: 'FallRisk',
-          assessmentDate: '2024-01-20',
+          type: 'Quarterly', // Valid enum
+          assessmentDate: new Date().toISOString().split('T')[0],
+          findings: { 'status': 'reviewed' },
         },
       });
 

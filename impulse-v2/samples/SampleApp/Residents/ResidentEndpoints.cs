@@ -107,7 +107,8 @@ public class GetResidentEndpoint : ImpulseEndpoint<GetResidentRequest, GetReside
 {
     public override Task<IImpulseResult> Handle(GetResidentRequest request, CancellationToken ct = default)
     {
-        if (request.Id <= 0)
+        // Simulated data only exists for residents 1-3
+        if (request.Id <= 0 || request.Id > 3)
         {
             return Task.FromResult<IImpulseResult>(ImpulseResults.NotFound("Resident not found"));
         }
@@ -200,7 +201,8 @@ public class UpdateResidentEndpoint : ImpulseEndpoint<UpdateResidentRequest, Upd
 {
     public override Task<IImpulseResult> Handle(UpdateResidentRequest request, CancellationToken ct = default)
     {
-        if (request.Id <= 0)
+        // Simulated data only exists for residents 1-3
+        if (request.Id <= 0 || request.Id > 3)
         {
             return Task.FromResult<IImpulseResult>(ImpulseResults.NotFound("Resident not found"));
         }

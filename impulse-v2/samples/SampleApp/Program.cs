@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Impulse.Core;
 using SampleApp.Residents;
 using SampleApp.Medications;
@@ -6,6 +8,13 @@ using SampleApp.CarePlans;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
+
+// Configure JSON to handle camelCase and enums
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 var app = builder.Build();
 
@@ -117,6 +126,14 @@ namespace Impulse.Core
             };
         }
 
+        // JSON options for request deserialization
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter() }
+        };
+
         private static Delegate CreatePostHandler(Type endpointType, string route, string version, Type requestType)
         {
             return async (HttpContext ctx) =>
@@ -127,7 +144,7 @@ namespace Impulse.Core
                 object? request;
                 try
                 {
-                    request = await ctx.Request.ReadFromJsonAsync(requestType, ctx.RequestAborted);
+                    request = await ctx.Request.ReadFromJsonAsync(requestType, JsonOptions, ctx.RequestAborted);
                     if (request == null)
                     {
                         return Results.BadRequest(new { error = "Invalid request body" });
@@ -136,9 +153,9 @@ namespace Impulse.Core
                     // Merge route parameters
                     request = MergeRouteParams(ctx, route, request, requestType);
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    return Results.BadRequest(new { error = "Invalid JSON" });
+                    return Results.BadRequest(new { error = $"Invalid JSON: {ex.Message}" });
                 }
 
                 var result = await (Task<IImpulseResult>)handleMethod.Invoke(endpoint, [request, ctx.RequestAborted])!;
@@ -257,6 +274,7 @@ namespace Impulse.Core
         {
             var isImpulseRequest = ctx.Request.Headers.ContainsKey("X-Impulse");
             var clientVersion = ctx.Request.Headers["X-Impulse-Version"].FirstOrDefault();
+            var isMutation = ctx.Request.Method != "GET";
 
             // Check version mismatch
             if (clientVersion != null && clientVersion != version)
@@ -266,6 +284,13 @@ namespace Impulse.Core
 
             if (result is ImpulseOkResult ok)
             {
+                // For mutations (POST/PUT/PATCH/DELETE), return data directly
+                if (isMutation)
+                {
+                    return Results.Json(ok.Value);
+                }
+
+                // For GET requests with X-Impulse header, return wrapped response
                 if (isImpulseRequest)
                 {
                     return Results.Json(new
@@ -303,7 +328,7 @@ namespace Impulse.Core
                 props,
                 component,
                 version
-            });
+            }, JsonOptions);
 
             var escapedJson = System.Web.HttpUtility.HtmlAttributeEncode(json);
 
@@ -313,9 +338,17 @@ namespace Impulse.Core
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
     <title>Impulse v2</title>
+    <style>
+        body {{ font-family: system-ui, sans-serif; margin: 0; padding: 20px; }}
+        #app {{ min-height: 100px; }}
+        pre {{ background: #f5f5f5; padding: 15px; border-radius: 8px; overflow: auto; }}
+    </style>
 </head>
 <body>
-    <div id=""app"" data-impulse=""{escapedJson}""></div>
+    <div id=""app"" data-impulse=""{escapedJson}"">
+        <h1>Loading...</h1>
+        <pre>{System.Web.HttpUtility.HtmlEncode(json)}</pre>
+    </div>
     <script type=""module"" src=""/assets/main.js""></script>
 </body>
 </html>";

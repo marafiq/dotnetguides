@@ -89,8 +89,15 @@ test.describe('Medications API', () => {
           residentId: 1,
           drugName: 'Lisinopril',
           genericName: 'Lisinopril',
+          prescribedDosage: {
+            amount: 10,
+            unit: 'mg',
+            instructions: 'Take with water',
+          },
           route: 'Oral',
-          startDate: '2024-01-15',
+          administrationTimes: ['Morning'],
+          frequencyDescription: 'Once daily',
+          startDate: new Date().toISOString().split('T')[0], // Today
           prescriber: 'Dr. Smith',
           purpose: 'Blood pressure management',
         },
@@ -104,7 +111,7 @@ test.describe('Medications API', () => {
       expect(typeof body.medicationId).toBe('number');
     });
 
-    test('returns 422 for missing required fields', async ({ request }) => {
+    test('returns 422 for invalid data', async ({ request }) => {
       const response = await request.post('/residents/1/medications', {
         headers: {
           'Content-Type': 'application/json',
@@ -112,7 +119,12 @@ test.describe('Medications API', () => {
         },
         data: {
           residentId: 1,
-          // Missing drugName, route, startDate
+          drugName: '', // Empty - fails validation
+          prescribedDosage: { amount: 0, unit: '', instructions: null }, // Invalid dosage
+          route: 'Oral',
+          administrationTimes: [], // Empty - fails validation
+          startDate: '2020-01-01', // Too old - fails validation
+          prescriber: '', // Empty - fails validation
         },
       });
 
@@ -133,6 +145,11 @@ test.describe('Medications API', () => {
           residentId: 1,
           medicationId: 1,
           administeredAt: new Date().toISOString(),
+          dosageGiven: {
+            amount: 10,
+            unit: 'mg',
+            instructions: null,
+          },
           wasRefused: false,
           notes: 'Administered without issues',
         },
