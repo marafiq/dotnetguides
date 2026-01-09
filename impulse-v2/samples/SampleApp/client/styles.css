@@ -726,3 +726,190 @@ h4 {
     gap: 1rem;
   }
 }
+
+/* ========================================
+   Dashboard Styles
+   ======================================== */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Attention Card */
+.attention-card {
+  display: block;
+  padding: 12px;
+  background: #fef3c7;
+  border-radius: var(--radius);
+  border-left: 3px solid #f59e0b;
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 0.2s;
+}
+
+.attention-card:hover {
+  background: #fde68a;
+}
+
+/* Task Item */
+.task-item {
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: var(--radius);
+  border-left: 3px solid #e5e7eb;
+}
+
+.task-item.task-overdue {
+  background: #fef2f2;
+  border-left-color: #ef4444;
+}
+
+/* Schedule Timeline */
+.schedule-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.schedule-time {
+  width: 70px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.schedule-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.schedule-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e5e7eb;
+}
+
+.schedule-dot-completed {
+  background: #10b981;
+}
+
+.schedule-dot-pending {
+  background: #3b82f6;
+}
+
+.schedule-dot-missed {
+  background: #ef4444;
+}
+
+.schedule-content {
+  flex: 1;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.schedule-item:last-child .schedule-content {
+  border-bottom: none;
+}
+
+/* Activity Feed */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.activity-item {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.activity-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* ========================================
+   Form Styles
+   ======================================== */
+
+.form-card {
+  max-width: 800px;
+}
+
+.form-section {
+  margin: 20px 0;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row > * {
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.form-error {
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius);
+}
+
+/* Findings Grid */
+.findings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* Recommendation Item */
+.recommendation-item {
+  padding: 12px;
+  background: #f0fdf4;
+  border-left: 3px solid #10b981;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+  margin: 20px;
+}

@@ -15,19 +15,22 @@ import type {
   ListMedicationsResponse,
   GetMedicationResponse,
   GetCarePlanResponse,
+  GetDashboardResponse,
 } from '../generated/types';
 import { RoutePaths } from '../generated/routePaths';
 
-// Import colocated components
+// Import colocated components - the Impulse way
 import { ResidentsList, ResidentDetail } from '../Features/Residents/Components';
+import { CreateResidentPage } from '../Features/Residents/CreateForm';
 import { MedicationsList, MedicationDetail } from '../Features/Medications/Components';
 import { CarePlanDetail } from '../Features/CarePlans/Components';
+import { Dashboard } from '../Features/Dashboard/Components';
 
 // Create Impulse context
 const ctx = createImpulseContext();
 
 // ========================================
-// Root Layout
+// Root Layout - Server-Driven Navigation
 // ========================================
 
 const RootLayout = () => (
@@ -37,41 +40,58 @@ const RootLayout = () => (
         Senior Living CRM
       </Link>
       <div className="nav-links">
+        <Link to="/dashboard" className="nav-link">
+          Dashboard
+        </Link>
         <Link to="/residents" className="nav-link">
           Residents
         </Link>
       </div>
     </nav>
-    <main className="app-main">
+    <main>
       <Outlet />
     </main>
     <footer className="app-footer">
-      <p>Powered by Impulse v2</p>
+      <p>Powered by Impulse v2 - Server-Driven UI</p>
     </footer>
   </div>
 );
 
 // ========================================
 // Route Definitions
+// Each route uses server-driven data loading
 // ========================================
 
 const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
-// Home route
+// Home redirect to dashboard
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: () => (
-    <div className="home-page">
-      <h1>Welcome to Senior Living CRM</h1>
-      <p>A demonstration of the Impulse v2 framework</p>
-      <Link to="/residents" className="btn btn-primary">
-        View Residents
-      </Link>
-    </div>
-  ),
+  component: () => {
+    // Redirect to dashboard - server drives the experience
+    window.location.href = '/dashboard';
+    return <div className="app-main"><p>Redirecting to Dashboard...</p></div>;
+  },
+});
+
+// Dashboard route - Server aggregates all data
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dashboard',
+  loader: async () => {
+    const hydration = getHydrationData<GetDashboardResponse>();
+    if (hydration && window.location.pathname === '/dashboard') {
+      return hydration.props;
+    }
+    return ctx.impulse<GetDashboardResponse>(RoutePaths.GetDashboard);
+  },
+  component: function DashboardPage() {
+    const data = dashboardRoute.useLoaderData();
+    return <Dashboard data={data} />;
+  },
 });
 
 // Residents list route
@@ -79,18 +99,23 @@ const residentsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/residents',
   loader: async () => {
-    // Check for SSR hydration data first
     const hydration = getHydrationData<ListResidentsResponse>();
     if (hydration && window.location.pathname === '/residents') {
       return hydration.props;
     }
-    // Otherwise fetch from server
     return ctx.impulse<ListResidentsResponse>(RoutePaths.ListResidents);
   },
   component: function ResidentsPage() {
     const data = residentsRoute.useLoaderData();
     return <ResidentsList data={data} />;
   },
+});
+
+// Create resident route - demonstrates mutations
+const createResidentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/residents/new',
+  component: CreateResidentPage,
 });
 
 // Resident detail route
@@ -173,7 +198,9 @@ const carePlanRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   homeRoute,
+  dashboardRoute,
   residentsRoute,
+  createResidentRoute,
   residentDetailRoute,
   medicationsRoute,
   medicationDetailRoute,

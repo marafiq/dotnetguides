@@ -10,11 +10,13 @@ export default defineConfig({
       '@generated': path.resolve(__dirname, '../generated'),
       '@features': path.resolve(__dirname, '../Features'),
       '@s2-styles': path.resolve(__dirname, './s2-styles.ts'),
+      // Ensure zod resolves from client node_modules for Features folder
+      'zod': path.resolve(__dirname, './node_modules/zod'),
     },
-    dedupe: ['react', 'react-dom', '@tanstack/react-router', '@tanstack/react-query', '@react-spectrum/s2'],
+    dedupe: ['react', 'react-dom', '@tanstack/react-router', '@tanstack/react-query', '@react-spectrum/s2', 'zod'],
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', '@tanstack/react-router', '@react-spectrum/s2'],
+    include: ['react', 'react-dom', '@tanstack/react-router', '@react-spectrum/s2', 'zod'],
   },
   build: {
     target: ['es2022'],

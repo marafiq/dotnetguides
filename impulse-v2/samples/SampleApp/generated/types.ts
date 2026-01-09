@@ -308,3 +308,82 @@ export interface AddAssessmentRequest {
 export interface AddAssessmentResponse {
   assessmentId: number;
 }
+
+// ========================================
+// Dashboard Types - Server-Driven Aggregations
+// ========================================
+
+export interface DashboardStats {
+  totalResidents: number;
+  activeResidents: number;
+  hospitalizedResidents: number;
+  onLeaveResidents: number;
+  totalMedications: number;
+  medicationsDueToday: number;
+  overdueMedications: number;
+  activeCarePlans: number;
+  upcomingAssessments: number;
+}
+
+export interface RecentActivity {
+  id: number;
+  type: string;
+  title: string;
+  description: string;
+  residentName: string;
+  residentId: number;
+  timestamp: string;
+  performedBy: string;
+}
+
+export interface UpcomingTask {
+  id: number;
+  type: string;
+  title: string;
+  description: string;
+  residentId: number;
+  residentName: string;
+  dueAt: string;
+  priority: string;
+  isOverdue: boolean;
+}
+
+export interface ResidentQuickView {
+  id: number;
+  firstName: string;
+  lastName: string;
+  roomNumber: string;
+  status: string;
+  activeMedicationsCount: number;
+  nextMedicationDue?: string | null;
+  hasOverdueMedications: boolean;
+  openCareGoals: number;
+}
+
+export interface MedicationComplianceData {
+  totalAdministrations: number;
+  onTimeAdministrations: number;
+  lateAdministrations: number;
+  refusedAdministrations: number;
+  complianceRate: number;
+}
+
+export interface DailyScheduleItem {
+  id: number;
+  time: string;
+  type: string;
+  title: string;
+  description: string;
+  residentId: number;
+  residentName: string;
+  status: string;
+}
+
+export interface GetDashboardResponse {
+  stats: DashboardStats;
+  recentActivities?: readonly RecentActivity[];
+  upcomingTasks?: readonly UpcomingTask[];
+  residentsNeedingAttention?: readonly ResidentQuickView[];
+  medicationCompliance: MedicationComplianceData;
+  todaysSchedule?: readonly DailyScheduleItem[];
+}

@@ -5,6 +5,7 @@
  * Use these for Link components and navigation.
  */
 export const RoutePaths = {
+  GetDashboard: '/dashboard' as const,
   ListResidents: '/residents' as const,
   GetResident: '/residents/{id}' as const,
   CreateResident: '/residents' as const,
