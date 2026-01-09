@@ -581,6 +581,133 @@ h4 {
 }
 
 /* ========================================
+   Impulse Utility Classes
+   ======================================== */
+
+/* Flex utilities */
+.impulse-flex { display: flex; }
+.impulse-flex-col { display: flex; flex-direction: column; }
+.impulse-flex-1 { flex: 1; }
+.impulse-items-center { align-items: center; }
+.impulse-items-start { align-items: flex-start; }
+.impulse-items-end { align-items: flex-end; }
+.impulse-justify-between { justify-content: space-between; }
+.impulse-justify-around { justify-content: space-around; }
+.impulse-wrap { flex-wrap: wrap; }
+
+/* Gap utilities */
+.impulse-gap-1 { gap: 4px; }
+.impulse-gap-2 { gap: 8px; }
+.impulse-gap-4 { gap: 16px; }
+.impulse-gap-6 { gap: 24px; }
+.impulse-gap-8 { gap: 32px; }
+
+/* Margin utilities */
+.impulse-mt-2 { margin-top: 8px; }
+.impulse-mt-4 { margin-top: 16px; }
+.impulse-mb-4 { margin-bottom: 16px; }
+.impulse-mb-5 { margin-bottom: 20px; }
+.impulse-mb-6 { margin-bottom: 24px; }
+.impulse-mb-8 { margin-bottom: 32px; }
+.impulse-p-4 { padding: 16px; }
+
+/* Typography */
+.impulse-label { color: #6b7280; font-size: 12px; }
+.impulse-label-upper { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+.impulse-label-upper-sm { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+.impulse-value { font-weight: 500; }
+.impulse-muted { color: #6b7280; }
+.impulse-muted-sm { font-size: 12px; color: #6b7280; }
+.impulse-muted-xs { font-size: 11px; color: #6b7280; }
+.impulse-link { color: #1d4ed8; }
+.impulse-refused { color: #b91c1c; font-style: italic; }
+.impulse-overdue { font-weight: 600; color: #b91c1c; }
+.impulse-subtitle { font-size: 18px; color: #6b7280; }
+.impulse-notes { line-height: 1.6; color: #374151; margin-top: 16px; }
+.impulse-check { color: #15803d; }
+
+/* Stats */
+.impulse-stat-value { font-size: 32px; font-weight: bold; }
+.impulse-stat-md { font-size: 24px; font-weight: bold; }
+.impulse-stat-lg { font-size: 28px; font-weight: bold; }
+.impulse-stat-sm { font-weight: bold; font-size: 18px; }
+.impulse-stat-highlight { font-weight: bold; font-size: 18px; color: #c2410c; }
+.impulse-success { color: #15803d; }
+.impulse-info { color: #1d4ed8; }
+
+/* Cards */
+.impulse-card { padding: 24px; }
+.impulse-stat-card { padding: 16px; min-width: 140px; flex: 1; text-align: center; }
+.impulse-summary-card { flex: 1; padding: 20px; min-width: 280px; }
+.impulse-summary-card-sm { flex: 1; padding: 20px; min-width: 200px; }
+.impulse-progress-card { flex: 2; padding: 24px; min-width: 400px; }
+.impulse-stats-card { flex: 1; padding: 24px; min-width: 250px; }
+.impulse-contact-card { padding: 16px; background: #f9fafb; }
+.impulse-contact-primary { background: #eff6ff; }
+.impulse-finding-card { padding: 12px; background: #f9fafb; }
+.impulse-warning-card { padding: 24px; background: #fef3c7; border-left: 4px solid #f59e0b; }
+.impulse-warning-title { margin: 0; color: #92400e; }
+.impulse-full-width { grid-column: 1 / -1; }
+
+/* Info card */
+.impulse-info-card { padding: 12px; background: #f3f4f6; border-radius: var(--radius); }
+.impulse-info-label { font-size: 12px; color: #6b7280; text-transform: uppercase; }
+.impulse-info-value { font-weight: 500; margin-top: 4px; }
+
+/* Avatar */
+.impulse-avatar-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* Findings grid */
+.impulse-findings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+/* Progress Ring */
+.impulse-progress-ring {
+  width: 120px;
+  height: 120px;
+  position: relative;
+}
+
+.impulse-progress-ring svg {
+  transform: rotate(-90deg);
+}
+
+.impulse-progress-ring-bg {
+  fill: none;
+  stroke: #e5e7eb;
+  stroke-width: 8;
+}
+
+.impulse-progress-ring-fill {
+  fill: none;
+  stroke: #3b82f6;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.3s ease;
+}
+
+.impulse-progress-ring-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+/* ========================================
    Responsive
    ======================================== */
 

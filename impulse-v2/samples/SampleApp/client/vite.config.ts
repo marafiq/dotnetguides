@@ -9,15 +9,16 @@ export default defineConfig({
       '@impulse/react': path.resolve(__dirname, './impulse-runtime.ts'),
       '@generated': path.resolve(__dirname, '../generated'),
       '@features': path.resolve(__dirname, '../Features'),
+      '@s2-styles': path.resolve(__dirname, './s2-styles.ts'),
     },
-    // Ensure dependencies resolve from client's node_modules
-    dedupe: ['react', 'react-dom', '@tanstack/react-router', '@tanstack/react-query'],
+    dedupe: ['react', 'react-dom', '@tanstack/react-router', '@tanstack/react-query', '@react-spectrum/s2'],
   },
-  // Include Features and generated directories in optimization
   optimizeDeps: {
-    include: ['react', 'react-dom', '@tanstack/react-router'],
+    include: ['react', 'react-dom', '@tanstack/react-router', '@react-spectrum/s2'],
   },
   build: {
+    target: ['es2022'],
+    cssMinify: 'lightningcss',
     outDir: '../wwwroot/assets',
     emptyOutDir: true,
     rollupOptions: {
@@ -26,6 +27,12 @@ export default defineConfig({
         entryFileNames: 'main.js',
         chunkFileNames: '[name]-[hash].js',
         assetFileNames: '[name]-[hash][extname]',
+        // Bundle all S2 and style-macro CSS into a single bundle
+        manualChunks(id) {
+          if (/macro-(.*?)\.css$/.test(id) || /@react-spectrum\/s2\/.*\.css$/.test(id)) {
+            return 's2-styles';
+          }
+        },
       },
     },
   },
