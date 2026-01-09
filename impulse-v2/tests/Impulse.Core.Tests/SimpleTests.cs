@@ -77,4 +77,106 @@ public static class SimpleTests
         Assert((attrUsage!.ValidOn & AttributeTargets.Class) != 0,
             "ImpulseEndpointAttribute should be applicable to classes");
     }
+
+    // ========================================
+    // ImpulseEndpoint<TRequest, TResponse> Tests
+    // ========================================
+
+    private static void Test_ImpulseEndpoint_IsAbstractClass()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseEndpoint`2, Impulse.Core");
+        Assert(type != null, "ImpulseEndpoint<,> should exist");
+        Assert(type!.IsAbstract, "ImpulseEndpoint should be abstract");
+        Assert(type.IsClass, "ImpulseEndpoint should be a class");
+    }
+
+    private static void Test_ImpulseEndpoint_HasHandleMethod()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseEndpoint`2, Impulse.Core");
+        Assert(type != null, "ImpulseEndpoint<,> should exist");
+
+        var handleMethod = type!.GetMethod("Handle");
+        Assert(handleMethod != null, "ImpulseEndpoint should have Handle method");
+        Assert(handleMethod!.IsAbstract, "Handle should be abstract");
+    }
+
+    private static void Test_ImpulseEndpoint_HandleReturnsTask()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseEndpoint`2, Impulse.Core");
+        Assert(type != null, "ImpulseEndpoint<,> should exist");
+
+        var handleMethod = type!.GetMethod("Handle");
+        Assert(handleMethod != null, "Handle method should exist");
+
+        var returnType = handleMethod!.ReturnType;
+        Assert(returnType.IsGenericType, "Return should be generic Task");
+        Assert(returnType.GetGenericTypeDefinition() == typeof(Task<>),
+            "Handle should return Task<IImpulseResult>");
+    }
+
+    // ========================================
+    // IImpulseResult Tests
+    // ========================================
+
+    private static void Test_IImpulseResult_Exists()
+    {
+        var type = Type.GetType("Impulse.Core.IImpulseResult, Impulse.Core");
+        Assert(type != null, "IImpulseResult should exist");
+        Assert(type!.IsInterface, "IImpulseResult should be an interface");
+    }
+
+    // ========================================
+    // ImpulseResults Static Factory Tests
+    // ========================================
+
+    private static void Test_ImpulseResults_HasOkMethod()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseResults, Impulse.Core");
+        Assert(type != null, "ImpulseResults should exist");
+
+        var okMethod = type!.GetMethod("Ok");
+        Assert(okMethod != null, "ImpulseResults should have Ok method");
+        Assert(okMethod!.IsStatic, "Ok should be static");
+    }
+
+    private static void Test_ImpulseResults_HasNotFoundMethod()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseResults, Impulse.Core");
+        Assert(type != null, "ImpulseResults should exist");
+
+        var method = type!.GetMethod("NotFound");
+        Assert(method != null, "ImpulseResults should have NotFound method");
+        Assert(method!.IsStatic, "NotFound should be static");
+    }
+
+    private static void Test_ImpulseResults_HasValidationProblemMethod()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseResults, Impulse.Core");
+        Assert(type != null, "ImpulseResults should exist");
+
+        var method = type!.GetMethod("ValidationProblem");
+        Assert(method != null, "ImpulseResults should have ValidationProblem method");
+        Assert(method!.IsStatic, "ValidationProblem should be static");
+    }
+
+    // ========================================
+    // ImpulseContext Tests
+    // ========================================
+
+    private static void Test_ImpulseContext_Exists()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseContext, Impulse.Core");
+        Assert(type != null, "ImpulseContext should exist");
+        Assert(type!.IsClass, "ImpulseContext should be a class");
+    }
+
+    private static void Test_ImpulseContext_HasIsImpulseRequestProperty()
+    {
+        var type = Type.GetType("Impulse.Core.ImpulseContext, Impulse.Core");
+        Assert(type != null, "ImpulseContext should exist");
+
+        var prop = type!.GetProperty("IsImpulseRequest");
+        Assert(prop != null, "ImpulseContext should have IsImpulseRequest property");
+        Assert(prop!.PropertyType == typeof(bool), "IsImpulseRequest should be bool");
+    }
 }
