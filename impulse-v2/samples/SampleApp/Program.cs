@@ -19,6 +19,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
+// Serve static files from wwwroot (for React client bundle)
+app.UseStaticFiles();
+
 // Version for client reload detection
 var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
 

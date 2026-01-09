@@ -10,6 +10,12 @@ export default defineConfig({
       '@generated': path.resolve(__dirname, '../generated'),
       '@features': path.resolve(__dirname, '../Features'),
     },
+    // Ensure dependencies resolve from client's node_modules
+    dedupe: ['react', 'react-dom', '@tanstack/react-router', '@tanstack/react-query'],
+  },
+  // Include Features and generated directories in optimization
+  optimizeDeps: {
+    include: ['react', 'react-dom', '@tanstack/react-router'],
   },
   build: {
     outDir: '../wwwroot/assets',

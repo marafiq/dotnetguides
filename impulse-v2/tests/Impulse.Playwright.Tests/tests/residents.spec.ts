@@ -127,6 +127,9 @@ test.describe('Residents API', () => {
           lastName: 'Doe',
           dateOfBirth: '1945-03-15',
           roomNumber: 'A101',
+          emergencyContacts: [
+            { name: 'Jane Doe', relationship: 'Spouse', phone: '555-1234', email: 'jane@email.com' }
+          ],
         },
       });
 
