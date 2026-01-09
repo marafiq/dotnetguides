@@ -9,53 +9,53 @@ public static class ImpulseResults
     /// <summary>
     /// Creates a 200 OK result with the specified data.
     /// </summary>
-    public static IImpulseResult<TData> Ok<TData>(TData data) => new OkResult<TData>(data);
+    public static ImpulseOkResult Ok<TData>(TData data) => new ImpulseOkResult(data);
 
     /// <summary>
     /// Creates a 404 Not Found result.
     /// </summary>
-    public static IImpulseResult NotFound(string? message = null) => new NotFoundResult(message);
+    public static ImpulseNotFoundResult NotFound(string? message = null) => new ImpulseNotFoundResult(message);
 
     /// <summary>
     /// Creates a 400 Bad Request result with validation errors.
     /// </summary>
-    public static IImpulseResult ValidationProblem(IDictionary<string, string[]> errors)
-        => new ValidationProblemResult(errors);
+    public static ImpulseValidationProblemResult ValidationProblem(IDictionary<string, string[]> errors)
+        => new ImpulseValidationProblemResult(errors);
 
     /// <summary>
     /// Creates a 201 Created result with location and data.
     /// </summary>
-    public static IImpulseResult<TData> Created<TData>(string location, TData data)
-        => new CreatedResult<TData>(location, data);
+    public static ImpulseCreatedResult Created<TData>(string location, TData data)
+        => new ImpulseCreatedResult(location, data);
 
     /// <summary>
     /// Creates a redirect result.
     /// </summary>
-    public static IImpulseResult Redirect(string url) => new RedirectResult(url);
+    public static ImpulseRedirectResult Redirect(string url) => new ImpulseRedirectResult(url);
 }
 
-// Internal result implementations
-internal sealed record OkResult<TData>(TData? Data) : IImpulseResult<TData>
+// Public result types for pattern matching in Program.cs
+public sealed record ImpulseOkResult(object? Value) : IImpulseResult
 {
     public int StatusCode => 200;
 }
 
-internal sealed record NotFoundResult(string? Message) : IImpulseResult
+public sealed record ImpulseNotFoundResult(string? Message) : IImpulseResult
 {
     public int StatusCode => 404;
 }
 
-internal sealed record ValidationProblemResult(IDictionary<string, string[]> Errors) : IImpulseResult
+public sealed record ImpulseValidationProblemResult(IDictionary<string, string[]> Errors) : IImpulseResult
 {
-    public int StatusCode => 400;
+    public int StatusCode => 422; // Changed to 422 for validation errors
 }
 
-internal sealed record CreatedResult<TData>(string Location, TData? Data) : IImpulseResult<TData>
+public sealed record ImpulseCreatedResult(string Location, object? Value) : IImpulseResult
 {
     public int StatusCode => 201;
 }
 
-internal sealed record RedirectResult(string Url) : IImpulseResult
+public sealed record ImpulseRedirectResult(string Url) : IImpulseResult
 {
     public int StatusCode => 302;
 }
