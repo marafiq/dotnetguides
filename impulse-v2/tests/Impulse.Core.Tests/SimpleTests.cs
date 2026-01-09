@@ -241,6 +241,62 @@ public static class SimpleTests
             "loaders.ts must NOT have hardcoded route strings - use RoutePaths instead");
     }
 
+    private static void Test_GeneratedRoutes_ImportRoutePaths()
+    {
+        var routesDir = FindGeneratedRoutesDir();
+        Assert(routesDir != null, "generated/routes directory should exist");
+
+        var routeFiles = Directory.GetFiles(routesDir!, "*.tsx");
+        Assert(routeFiles.Length > 0, "Should have generated route files");
+
+        foreach (var routeFile in routeFiles)
+        {
+            var content = File.ReadAllText(routeFile);
+            Assert(content.Contains("import { RoutePaths }") || content.Contains("import {RoutePaths}"),
+                $"{Path.GetFileName(routeFile)} must import RoutePaths - zero magic strings rule");
+        }
+    }
+
+    private static void Test_GeneratedRoutes_UseRoutePaths_NotMagicStrings()
+    {
+        var routesDir = FindGeneratedRoutesDir();
+        Assert(routesDir != null, "generated/routes directory should exist");
+
+        var routeFiles = Directory.GetFiles(routesDir!, "*.tsx");
+        foreach (var routeFile in routeFiles)
+        {
+            var content = File.ReadAllText(routeFile);
+
+            // Should use RoutePaths.X
+            Assert(content.Contains("RoutePaths."),
+                $"{Path.GetFileName(routeFile)} must use RoutePaths.X constants");
+
+            // Should NOT contain hardcoded route strings in impulse calls
+            var hasMagicString = System.Text.RegularExpressions.Regex.IsMatch(
+                content, @"impulse<[^>]+>\('\/");
+            Assert(!hasMagicString,
+                $"{Path.GetFileName(routeFile)} must NOT have hardcoded route strings in impulse calls");
+        }
+    }
+
+    private static string? FindGeneratedRoutesDir()
+    {
+        var assemblyDir = Path.GetDirectoryName(typeof(SimpleTests).Assembly.Location);
+        var searchPaths = new[]
+        {
+            Path.Combine(assemblyDir!, "..", "..", "..", "..", "..", "samples", "SampleApp", "generated", "routes"),
+            Path.Combine(assemblyDir!, "..", "..", "..", "..", "samples", "SampleApp", "generated", "routes"),
+        };
+
+        foreach (var path in searchPaths)
+        {
+            var normalized = Path.GetFullPath(path);
+            if (Directory.Exists(normalized))
+                return normalized;
+        }
+        return null;
+    }
+
     private static string? FindGeneratedFile(string fileName)
     {
         // Look for generated file relative to test assembly

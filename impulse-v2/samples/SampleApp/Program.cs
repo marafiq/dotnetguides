@@ -12,6 +12,9 @@ var app = builder.Build();
 // Version for client reload detection
 var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
 
+// Health check endpoint for Playwright
+app.MapGet("/", () => Results.Ok(new { status = "healthy", version }));
+
 // Map all Impulse endpoints automatically
 app.MapImpulseEndpoints(Assembly.GetExecutingAssembly(), version);
 

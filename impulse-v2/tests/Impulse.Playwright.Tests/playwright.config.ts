@@ -39,9 +39,17 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'dotnet run --project ../../samples/SampleApp/SampleApp.csproj',
+    command: `${process.env.HOME}/.dotnet/dotnet run --project ../../samples/SampleApp/SampleApp.csproj --urls http://localhost:5000`,
     url: 'http://localhost:5000',
     reuseExistingServer: !process.env.CI,
-    timeout: 120000,
+    timeout: 60000,
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: {
+      HOME: process.env.HOME,
+      DOTNET_ROOT: `${process.env.HOME}/.dotnet`,
+      PATH: `${process.env.HOME}/.dotnet:${process.env.PATH}`,
+      ASPNETCORE_ENVIRONMENT: 'Development',
+    },
   },
 });
