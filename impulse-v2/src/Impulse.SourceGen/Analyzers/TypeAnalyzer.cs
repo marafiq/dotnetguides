@@ -64,6 +64,16 @@ public class TypeAnalyzer
             return;
         }
 
+        // IMPORTANT: Analyze nested types FIRST to ensure dependencies are defined
+        // before they are referenced (topological order)
+        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var propType = UnwrapNullable(prop.PropertyType);
+            propType = UnwrapCollection(propType);
+            AnalyzeType(propType);
+        }
+
+        // Now add this interface (after all dependencies are added)
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.CanRead)
             .Select(p => new TsProperty(
@@ -73,14 +83,6 @@ public class TypeAnalyzer
             .ToList();
 
         _interfaces.Add(new TsInterface(type.Name, properties));
-
-        // Analyze nested types
-        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            var propType = UnwrapNullable(prop.PropertyType);
-            propType = UnwrapCollection(propType);
-            AnalyzeType(propType);
-        }
     }
 
     private void AnalyzeEnum(Type type)
@@ -100,6 +102,16 @@ public class TypeAnalyzer
         if (!_visitedTypes.Add(type)) return;
         if (type.IsEnum) return; // Enums use z.nativeEnum
 
+        // IMPORTANT: Analyze nested types FIRST to ensure dependencies are defined
+        // before they are referenced (topological order)
+        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var propType = UnwrapNullable(prop.PropertyType);
+            propType = UnwrapCollection(propType);
+            AnalyzeTypeForZod(propType);
+        }
+
+        // Now add this schema (after all dependencies are added)
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.CanRead)
             .Select(p => new ZodProperty(
@@ -109,14 +121,6 @@ public class TypeAnalyzer
             .ToList();
 
         _schemas.Add(new ZodSchema($"{type.Name}Schema", new ZodObject(properties)));
-
-        // Analyze nested types
-        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            var propType = UnwrapNullable(prop.PropertyType);
-            propType = UnwrapCollection(propType);
-            AnalyzeTypeForZod(propType);
-        }
     }
 
     /// <summary>
