@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   Card,
+  CardPreview,
   Badge,
   Button,
   Heading,
@@ -11,6 +12,11 @@ import {
   Meter,
   ProgressBar,
   ActionButton,
+  Avatar,
+  Content,
+  Header,
+  Footer,
+  IllustratedMessage,
 } from '@react-spectrum/s2';
 import type {
   GetDashboardResponse,
@@ -26,8 +32,7 @@ import { formatRelativeTime, formatTime } from '../../client/shared/utils';
 
 // ========================================
 // Dashboard Overview Component
-// Demonstrates complex server-driven UI
-// All data is aggregated server-side - this is the Impulse way
+// Server-driven UI with S2 design system
 // ========================================
 
 interface DashboardProps {
@@ -36,45 +41,66 @@ interface DashboardProps {
 
 export function Dashboard({ data }: DashboardProps) {
   return (
-    <div className="app-main">
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <Heading level={1}>Dashboard</Heading>
-          <Text UNSAFE_className="impulse-muted">
-            Senior Living Facility Overview - {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+    <div className="dashboard-container">
+      {/* Page Header */}
+      <header className="dashboard-header">
+        <div className="dashboard-header-content">
+          <Heading level={1} UNSAFE_className="dashboard-title">Dashboard</Heading>
+          <Text slot="description" UNSAFE_className="dashboard-subtitle">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </Text>
         </div>
-        <div className="impulse-flex impulse-gap-2">
-          <ActionButton>Export Report</ActionButton>
-          <Button variant="accent">+ Quick Admit</Button>
+        <div className="dashboard-actions">
+          <Button variant="secondary" style="outline">Export Report</Button>
+          <Button variant="accent">+ New Resident</Button>
         </div>
-      </div>
+      </header>
 
-      {/* Stats Grid */}
-      <StatsGrid stats={data.stats} />
+      {/* Stats Row */}
+      <section className="stats-section">
+        <StatCard
+          icon="👥"
+          label="Total Residents"
+          value={data.stats.totalResidents}
+          detail={`${data.stats.activeResidents} active`}
+          color="blue"
+        />
+        <StatCard
+          icon="💊"
+          label="Medications Due"
+          value={data.stats.medicationsDueToday}
+          detail={data.stats.overdueMedications > 0 ? `${data.stats.overdueMedications} overdue` : 'All on track'}
+          color={data.stats.overdueMedications > 0 ? 'red' : 'green'}
+        />
+        <StatCard
+          icon="📋"
+          label="Care Plans"
+          value={data.stats.activeCarePlans}
+          detail={`${data.stats.upcomingAssessments} reviews due`}
+          color="purple"
+        />
+        <StatCard
+          icon="🏥"
+          label="Hospitalized"
+          value={data.stats.hospitalizedResidents}
+          detail={data.stats.onLeaveResidents > 0 ? `${data.stats.onLeaveResidents} on leave` : 'None on leave'}
+          color={data.stats.hospitalizedResidents > 0 ? 'orange' : 'gray'}
+        />
+      </section>
 
-      {/* Main Content Grid */}
-      <div className="dashboard-grid">
-        {/* Left Column */}
-        <div className="impulse-flex impulse-flex-col impulse-gap-6">
-          {/* Residents Needing Attention */}
-          <ResidentsAttentionCard residents={data.residentsNeedingAttention} />
-
-          {/* Upcoming Tasks */}
-          <UpcomingTasksCard tasks={data.upcomingTasks} />
+      {/* Main Grid */}
+      <div className="dashboard-main">
+        {/* Primary Content */}
+        <div className="dashboard-primary">
+          <AlertsCard residents={data.residentsNeedingAttention} />
+          <TasksCard tasks={data.upcomingTasks} />
         </div>
 
-        {/* Right Column */}
-        <div className="impulse-flex impulse-flex-col impulse-gap-6">
-          {/* Medication Compliance */}
+        {/* Secondary Content */}
+        <div className="dashboard-secondary">
           <ComplianceCard compliance={data.medicationCompliance} />
-
-          {/* Today's Schedule */}
           <ScheduleCard schedule={data.todaysSchedule} />
-
-          {/* Recent Activity */}
-          <RecentActivityCard activities={data.recentActivities} />
+          <ActivityCard activities={data.recentActivities} />
         </div>
       </div>
     </div>
@@ -82,153 +108,119 @@ export function Dashboard({ data }: DashboardProps) {
 }
 
 // ========================================
-// Stats Grid Component
+// Stat Card - Clean metric display
 // ========================================
 
-function StatsGrid({ stats }: { stats: DashboardStats }) {
-  return (
-    <div className="impulse-flex impulse-gap-4 impulse-wrap impulse-mb-6">
-      <StatCard
-        label="Total Residents"
-        value={stats.totalResidents}
-        variant="informative"
-        detail={`${stats.activeResidents} active`}
-      />
-      <StatCard
-        label="Medications Due"
-        value={stats.medicationsDueToday}
-        variant={stats.overdueMedications > 0 ? 'negative' : 'positive'}
-        detail={stats.overdueMedications > 0 ? `${stats.overdueMedications} overdue` : 'All on track'}
-      />
-      <StatCard
-        label="Active Care Plans"
-        value={stats.activeCarePlans}
-        variant="positive"
-        detail={`${stats.upcomingAssessments} assessments due`}
-      />
-      <StatCard
-        label="Hospitalized"
-        value={stats.hospitalizedResidents}
-        variant={stats.hospitalizedResidents > 0 ? 'notice' : 'neutral'}
-        detail={stats.onLeaveResidents > 0 ? `${stats.onLeaveResidents} on leave` : 'None on leave'}
-      />
-    </div>
-  );
-}
-
-function StatCard({ label, value, variant, detail }: {
+function StatCard({ icon, label, value, detail, color }: {
+  icon: string;
   label: string;
   value: number;
-  variant: 'positive' | 'negative' | 'notice' | 'informative' | 'neutral';
   detail: string;
+  color: 'blue' | 'green' | 'red' | 'orange' | 'purple' | 'gray';
 }) {
+  const colorMap = {
+    blue: { bg: '#eff6ff', accent: '#2563eb', text: '#1e40af' },
+    green: { bg: '#f0fdf4', accent: '#16a34a', text: '#166534' },
+    red: { bg: '#fef2f2', accent: '#dc2626', text: '#991b1b' },
+    orange: { bg: '#fff7ed', accent: '#ea580c', text: '#9a3412' },
+    purple: { bg: '#faf5ff', accent: '#9333ea', text: '#6b21a8' },
+    gray: { bg: '#f9fafb', accent: '#6b7280', text: '#374151' },
+  };
+  const colors = colorMap[color];
+
   return (
-    <Card UNSAFE_className="impulse-stat-card">
-      <div className="impulse-flex impulse-flex-col impulse-items-center impulse-gap-2">
-        <Text UNSAFE_className="impulse-label-upper">{label}</Text>
-        <Text UNSAFE_className="impulse-stat-value">{value}</Text>
-        <Badge variant={variant} size="S">{detail}</Badge>
+    <div className="stat-card" style={{ backgroundColor: colors.bg, borderLeft: `4px solid ${colors.accent}` }}>
+      <div className="stat-icon">{icon}</div>
+      <div className="stat-content">
+        <span className="stat-label">{label}</span>
+        <span className="stat-value" style={{ color: colors.accent }}>{value}</span>
+        <span className="stat-detail" style={{ color: colors.text }}>{detail}</span>
       </div>
-    </Card>
+    </div>
   );
 }
 
 // ========================================
-// Residents Needing Attention
+// Alerts Card - Residents needing attention
 // ========================================
 
-function ResidentsAttentionCard({ residents }: { residents?: readonly ResidentQuickView[] }) {
+function AlertsCard({ residents }: { residents?: readonly ResidentQuickView[] }) {
   return (
-    <Card UNSAFE_className="impulse-card">
-      <div className="impulse-flex impulse-justify-between impulse-items-center impulse-mb-4">
-        <Heading level={2} UNSAFE_style={{ margin: 0 }}>Needs Attention</Heading>
+    <Card UNSAFE_className="dashboard-card alerts-card">
+      <div className="card-header">
+        <div className="card-title-group">
+          <span className="card-icon">⚠️</span>
+          <Heading level={3} UNSAFE_className="card-title">Needs Attention</Heading>
+        </div>
         <Badge variant="negative" size="S">{residents?.length || 0}</Badge>
       </div>
-      <Divider />
 
-      <div className="impulse-flex impulse-flex-col impulse-gap-4 impulse-mt-4">
-        {residents?.map((resident) => (
-          <Link key={resident.id} to={getResidentPath(resident.id)} className="attention-card">
-            <div className="impulse-flex impulse-justify-between impulse-items-start">
-              <div className="impulse-flex impulse-flex-col impulse-gap-1">
-                <Text UNSAFE_className="impulse-value">
-                  {resident.firstName} {resident.lastName}
-                </Text>
-                <Text UNSAFE_className="impulse-muted-sm">Room {resident.roomNumber}</Text>
-              </div>
-              <div className="impulse-flex impulse-flex-col impulse-items-end impulse-gap-1">
-                {resident.hasOverdueMedications ? (
-                  <Badge variant="negative" size="S">Overdue Med</Badge>
-                ) : (
-                  <Badge variant="informative" size="S">{resident.activeMedicationsCount} meds</Badge>
-                )}
-                <Text UNSAFE_className="impulse-muted-xs">
-                  {resident.openCareGoals} open goals
-                </Text>
-              </div>
+      <div className="alert-list">
+        {residents?.slice(0, 4).map((resident) => (
+          <Link key={resident.id} to={getResidentPath(resident.id)} className="alert-item">
+            <Avatar
+              src={`https://api.dicebear.com/7.x/initials/svg?seed=${resident.firstName}%20${resident.lastName}&backgroundColor=fef3c7`}
+              alt={`${resident.firstName} ${resident.lastName}`}
+              size="M"
+            />
+            <div className="alert-content">
+              <span className="alert-name">{resident.firstName} {resident.lastName}</span>
+              <span className="alert-room">Room {resident.roomNumber}</span>
             </div>
-            {resident.nextMedicationDue && (
-              <div className="impulse-flex impulse-items-center impulse-gap-2 impulse-mt-2">
-                <StatusLight variant={resident.hasOverdueMedications ? 'negative' : 'notice'}>
-                  Next med: {formatTime(resident.nextMedicationDue)}
-                </StatusLight>
-              </div>
-            )}
+            <div className="alert-status">
+              {resident.hasOverdueMedications ? (
+                <Badge variant="negative" size="S">Overdue</Badge>
+              ) : (
+                <Badge variant="notice" size="S">{resident.activeMedicationsCount} meds</Badge>
+              )}
+              {resident.nextMedicationDue && (
+                <span className="alert-time">Next: {formatTime(resident.nextMedicationDue)}</span>
+              )}
+            </div>
           </Link>
         ))}
       </div>
+
+      {(!residents || residents.length === 0) && (
+        <div className="empty-state">
+          <span className="empty-icon">✅</span>
+          <span>All residents are on track</span>
+        </div>
+      )}
     </Card>
   );
 }
 
 // ========================================
-// Upcoming Tasks Card
+// Tasks Card - Upcoming tasks
 // ========================================
 
-function UpcomingTasksCard({ tasks }: { tasks?: readonly UpcomingTask[] }) {
-  const getTaskVariant = (priority: string, isOverdue: boolean) => {
-    if (isOverdue) return 'negative';
-    switch (priority) {
-      case 'urgent': return 'negative';
-      case 'high': return 'notice';
-      default: return 'neutral';
-    }
-  };
-
-  const getTaskIcon = (type: string) => {
-    switch (type) {
-      case 'medication': return 'pill';
-      case 'assessment': return 'clipboard';
-      case 'care_review': return 'heart';
-      default: return 'task';
-    }
-  };
-
+function TasksCard({ tasks }: { tasks?: readonly UpcomingTask[] }) {
   return (
-    <Card UNSAFE_className="impulse-card">
-      <div className="impulse-flex impulse-justify-between impulse-items-center impulse-mb-4">
-        <Heading level={2} UNSAFE_style={{ margin: 0 }}>Upcoming Tasks</Heading>
-        <ActionButton>View All</ActionButton>
+    <Card UNSAFE_className="dashboard-card tasks-card">
+      <div className="card-header">
+        <div className="card-title-group">
+          <span className="card-icon">📝</span>
+          <Heading level={3} UNSAFE_className="card-title">Upcoming Tasks</Heading>
+        </div>
+        <Button variant="secondary" style="outline" size="S">View All</Button>
       </div>
-      <Divider />
 
-      <div className="impulse-flex impulse-flex-col impulse-gap-3 impulse-mt-4">
+      <div className="task-list">
         {tasks?.slice(0, 5).map((task) => (
           <div key={task.id} className={`task-item ${task.isOverdue ? 'task-overdue' : ''}`}>
-            <div className="impulse-flex impulse-justify-between impulse-items-start">
-              <div className="impulse-flex impulse-flex-col impulse-gap-1">
-                <div className="impulse-flex impulse-items-center impulse-gap-2">
-                  <Text UNSAFE_className="impulse-value">{task.title}</Text>
-                  {task.isOverdue && <Badge variant="negative" size="S">Overdue</Badge>}
-                </div>
-                <Text UNSAFE_className="impulse-muted-sm">{task.description}</Text>
-                <Link to={getResidentPath(task.residentId)}>
-                  <Text UNSAFE_className="impulse-link">{task.residentName}</Text>
-                </Link>
+            <div className="task-time">
+              <span className="task-hour">{formatTime(task.dueAt)}</span>
+            </div>
+            <div className="task-content">
+              <div className="task-header">
+                <span className="task-title">{task.title}</span>
+                {task.isOverdue && <Badge variant="negative" size="S">Overdue</Badge>}
               </div>
-              <Badge variant={getTaskVariant(task.priority, task.isOverdue)} size="S">
-                {formatTime(task.dueAt)}
-              </Badge>
+              <span className="task-description">{task.description}</span>
+              <Link to={getResidentPath(task.residentId)} className="task-resident">
+                {task.residentName}
+              </Link>
             </div>
           </div>
         ))}
@@ -238,51 +230,53 @@ function UpcomingTasksCard({ tasks }: { tasks?: readonly UpcomingTask[] }) {
 }
 
 // ========================================
-// Compliance Card
+// Compliance Card - Medication compliance
 // ========================================
 
 function ComplianceCard({ compliance }: { compliance: MedicationComplianceData }) {
+  const rate = compliance.complianceRate;
+  const rateColor = rate >= 90 ? '#16a34a' : rate >= 75 ? '#ea580c' : '#dc2626';
+
   return (
-    <Card UNSAFE_className="impulse-card">
-      <Heading level={2} UNSAFE_style={{ margin: 0, marginBottom: 16 }}>Medication Compliance</Heading>
-      <Divider />
+    <Card UNSAFE_className="dashboard-card compliance-card">
+      <div className="card-header">
+        <div className="card-title-group">
+          <span className="card-icon">📊</span>
+          <Heading level={3} UNSAFE_className="card-title">Compliance</Heading>
+        </div>
+      </div>
 
-      <div className="impulse-flex impulse-flex-col impulse-gap-4 impulse-mt-4">
-        {/* Compliance Meter */}
-        <div className="impulse-flex impulse-items-center impulse-gap-4">
-          <div className="impulse-progress-ring">
-            <svg width="120" height="120">
-              <circle className="impulse-progress-ring-bg" cx="60" cy="60" r="52" />
-              <circle
-                className="impulse-progress-ring-fill"
-                cx="60" cy="60" r="52"
-                strokeDasharray={`${compliance.complianceRate * 3.27} 327`}
-              />
-            </svg>
-            <div className="impulse-progress-ring-center">
-              <Text UNSAFE_className="impulse-stat-lg">{compliance.complianceRate}%</Text>
-              <Text UNSAFE_className="impulse-muted-xs">Compliance</Text>
-            </div>
+      <div className="compliance-content">
+        <div className="compliance-ring">
+          <svg viewBox="0 0 100 100" className="compliance-svg">
+            <circle cx="50" cy="50" r="40" className="compliance-bg" />
+            <circle
+              cx="50" cy="50" r="40"
+              className="compliance-fill"
+              style={{
+                stroke: rateColor,
+                strokeDasharray: `${rate * 2.51} 251`
+              }}
+            />
+          </svg>
+          <div className="compliance-value">
+            <span className="compliance-percent" style={{ color: rateColor }}>{rate}%</span>
+            <span className="compliance-label">compliance</span>
           </div>
+        </div>
 
-          <div className="impulse-flex impulse-flex-col impulse-gap-2 impulse-flex-1">
-            <div className="impulse-flex impulse-justify-between">
-              <Text UNSAFE_className="impulse-muted-sm">On Time</Text>
-              <Text UNSAFE_className="impulse-success">{compliance.onTimeAdministrations}</Text>
-            </div>
-            <div className="impulse-flex impulse-justify-between">
-              <Text UNSAFE_className="impulse-muted-sm">Late</Text>
-              <Text UNSAFE_className="impulse-stat-highlight">{compliance.lateAdministrations}</Text>
-            </div>
-            <div className="impulse-flex impulse-justify-between">
-              <Text UNSAFE_className="impulse-muted-sm">Refused</Text>
-              <Text>{compliance.refusedAdministrations}</Text>
-            </div>
-            <Divider />
-            <div className="impulse-flex impulse-justify-between">
-              <Text UNSAFE_className="impulse-muted-sm">Total</Text>
-              <Text UNSAFE_className="impulse-value">{compliance.totalAdministrations}</Text>
-            </div>
+        <div className="compliance-stats">
+          <div className="compliance-stat">
+            <span className="compliance-stat-value compliance-success">{compliance.onTimeAdministrations}</span>
+            <span className="compliance-stat-label">On Time</span>
+          </div>
+          <div className="compliance-stat">
+            <span className="compliance-stat-value compliance-warning">{compliance.lateAdministrations}</span>
+            <span className="compliance-stat-label">Late</span>
+          </div>
+          <div className="compliance-stat">
+            <span className="compliance-stat-value compliance-danger">{compliance.refusedAdministrations}</span>
+            <span className="compliance-stat-label">Refused</span>
           </div>
         </div>
       </div>
@@ -291,46 +285,34 @@ function ComplianceCard({ compliance }: { compliance: MedicationComplianceData }
 }
 
 // ========================================
-// Schedule Card
+// Schedule Card - Today's schedule
 // ========================================
 
 function ScheduleCard({ schedule }: { schedule?: readonly DailyScheduleItem[] }) {
-  const getStatusVariant = (status: string): 'positive' | 'neutral' | 'negative' => {
-    switch (status) {
-      case 'completed': return 'positive';
-      case 'pending': return 'neutral';
-      case 'missed': return 'negative';
-      default: return 'neutral';
-    }
-  };
+  const completed = schedule?.filter(s => s.status === 'completed').length || 0;
+  const total = schedule?.length || 0;
 
   return (
-    <Card UNSAFE_className="impulse-card">
-      <div className="impulse-flex impulse-justify-between impulse-items-center impulse-mb-4">
-        <Heading level={2} UNSAFE_style={{ margin: 0 }}>Today's Schedule</Heading>
-        <Badge variant="informative" size="S">
-          {schedule?.filter(s => s.status === 'completed').length}/{schedule?.length}
-        </Badge>
+    <Card UNSAFE_className="dashboard-card schedule-card">
+      <div className="card-header">
+        <div className="card-title-group">
+          <span className="card-icon">🗓️</span>
+          <Heading level={3} UNSAFE_className="card-title">Today's Schedule</Heading>
+        </div>
+        <Badge variant="informative" size="S">{completed}/{total}</Badge>
       </div>
-      <Divider />
 
-      <div className="schedule-timeline impulse-mt-4">
-        {schedule?.map((item) => (
+      <div className="schedule-list">
+        {schedule?.slice(0, 5).map((item, index) => (
           <div key={item.id} className={`schedule-item schedule-${item.status}`}>
-            <div className="schedule-time">
-              <Text UNSAFE_className="impulse-muted-sm">{item.time}</Text>
-            </div>
-            <div className="schedule-marker">
+            <div className="schedule-time">{item.time}</div>
+            <div className="schedule-indicator">
               <div className={`schedule-dot schedule-dot-${item.status}`} />
+              {index < (schedule?.length || 0) - 1 && <div className="schedule-line" />}
             </div>
             <div className="schedule-content">
-              <div className="impulse-flex impulse-items-center impulse-gap-2">
-                <Text UNSAFE_className="impulse-value">{item.title}</Text>
-                <StatusLight variant={getStatusVariant(item.status)}>
-                  {item.status}
-                </StatusLight>
-              </div>
-              <Text UNSAFE_className="impulse-muted-sm">{item.description}</Text>
+              <span className="schedule-title">{item.title}</span>
+              <span className="schedule-desc">{item.description}</span>
             </div>
           </div>
         ))}
@@ -340,49 +322,42 @@ function ScheduleCard({ schedule }: { schedule?: readonly DailyScheduleItem[] })
 }
 
 // ========================================
-// Recent Activity Card
+// Activity Card - Recent activity
 // ========================================
 
-function RecentActivityCard({ activities }: { activities?: readonly RecentActivity[] }) {
-  const getActivityVariant = (type: string): 'positive' | 'informative' | 'notice' | 'neutral' => {
+function ActivityCard({ activities }: { activities?: readonly RecentActivity[] }) {
+  const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'medication_given': return 'positive';
-      case 'assessment_completed': return 'informative';
-      case 'care_plan_updated': return 'notice';
-      case 'resident_admitted': return 'positive';
-      default: return 'neutral';
+      case 'medication_given': return '💊';
+      case 'assessment_completed': return '📋';
+      case 'care_plan_updated': return '📝';
+      case 'resident_admitted': return '🏠';
+      default: return '📌';
     }
   };
 
   return (
-    <Card UNSAFE_className="impulse-card">
-      <div className="impulse-flex impulse-justify-between impulse-items-center impulse-mb-4">
-        <Heading level={2} UNSAFE_style={{ margin: 0 }}>Recent Activity</Heading>
-        <ActionButton>View All</ActionButton>
+    <Card UNSAFE_className="dashboard-card activity-card">
+      <div className="card-header">
+        <div className="card-title-group">
+          <span className="card-icon">🕐</span>
+          <Heading level={3} UNSAFE_className="card-title">Recent Activity</Heading>
+        </div>
+        <Button variant="secondary" style="outline" size="S">View All</Button>
       </div>
-      <Divider />
 
-      <div className="activity-feed impulse-mt-4">
-        {activities?.slice(0, 5).map((activity) => (
+      <div className="activity-list">
+        {activities?.slice(0, 4).map((activity) => (
           <div key={activity.id} className="activity-item">
-            <div className="impulse-flex impulse-justify-between impulse-items-start">
-              <div className="impulse-flex impulse-flex-col impulse-gap-1">
-                <div className="impulse-flex impulse-items-center impulse-gap-2">
-                  <Badge variant={getActivityVariant(activity.type)} size="S">
-                    {activity.type.replace('_', ' ')}
-                  </Badge>
-                  <Text UNSAFE_className="impulse-muted-xs">
-                    {formatRelativeTime(activity.timestamp)}
-                  </Text>
-                </div>
-                <Text UNSAFE_className="impulse-value">{activity.title}</Text>
-                <Text UNSAFE_className="impulse-muted-sm">{activity.description}</Text>
-                <div className="impulse-flex impulse-gap-2">
-                  <Link to={getResidentPath(activity.residentId)}>
-                    <Text UNSAFE_className="impulse-link">{activity.residentName}</Text>
-                  </Link>
-                  <Text UNSAFE_className="impulse-muted-xs">by {activity.performedBy}</Text>
-                </div>
+            <span className="activity-icon">{getTypeIcon(activity.type)}</span>
+            <div className="activity-content">
+              <span className="activity-title">{activity.title}</span>
+              <span className="activity-desc">{activity.description}</span>
+              <div className="activity-meta">
+                <Link to={getResidentPath(activity.residentId)} className="activity-resident">
+                  {activity.residentName}
+                </Link>
+                <span className="activity-time">{formatRelativeTime(activity.timestamp)}</span>
               </div>
             </div>
           </div>
