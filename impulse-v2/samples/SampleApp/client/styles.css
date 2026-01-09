@@ -711,10 +711,61 @@ h4 {
    Responsive
    ======================================== */
 
+/* Tablet and below */
+@media (max-width: 1024px) {
+  .app-main {
+    padding: 1.5rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-header > div:last-child {
+    margin-top: 1rem;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .impulse-stat-card {
+    min-width: 120px;
+  }
+
+  .impulse-progress-card {
+    min-width: 100%;
+  }
+
+  .impulse-stats-card {
+    min-width: 100%;
+  }
+}
+
+/* Mobile */
 @media (max-width: 768px) {
   .app-nav {
     flex-direction: column;
     gap: 1rem;
+    padding: 1rem;
+  }
+
+  .nav-links {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .app-main {
+    padding: 1rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
   }
 
   .detail-grid {
@@ -724,6 +775,121 @@ h4 {
   .care-plan-meta {
     flex-direction: column;
     gap: 1rem;
+  }
+
+  /* Stack stat cards */
+  .impulse-flex.impulse-gap-4.impulse-wrap {
+    flex-direction: column;
+  }
+
+  .impulse-stat-card {
+    min-width: 100%;
+  }
+
+  .impulse-summary-card,
+  .impulse-summary-card-sm {
+    min-width: 100%;
+  }
+
+  /* Form responsive */
+  .form-card {
+    max-width: 100%;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .form-row > * {
+    width: 100%;
+  }
+
+  /* Info row stack */
+  .info-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* Resident card responsive */
+  .resident-card .impulse-flex.impulse-items-center.impulse-gap-4 {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  /* Contact info stack */
+  .contact-info {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Quick links wrap */
+  .quick-links {
+    flex-direction: column;
+  }
+
+  .quick-links a,
+  .quick-links button {
+    width: 100%;
+  }
+
+  /* Progress ring smaller on mobile */
+  .impulse-progress-ring {
+    width: 100px;
+    height: 100px;
+  }
+
+  .impulse-progress-ring svg {
+    width: 100px;
+    height: 100px;
+  }
+
+  .impulse-progress-ring circle {
+    r: 42;
+    cx: 50;
+    cy: 50;
+  }
+
+  /* Medication compliance flex column on mobile */
+  .impulse-flex.impulse-items-center.impulse-gap-4:has(.impulse-progress-ring) {
+    flex-direction: column;
+  }
+}
+
+/* Small mobile */
+@media (max-width: 480px) {
+  .app-nav {
+    padding: 0.75rem;
+  }
+
+  .app-main {
+    padding: 0.75rem;
+  }
+
+  h1 {
+    font-size: 1.25rem;
+  }
+
+  h2 {
+    font-size: 1.125rem;
+  }
+
+  .impulse-card {
+    padding: 16px;
+  }
+
+  .impulse-stat-value {
+    font-size: 24px;
+  }
+
+  .page-header {
+    gap: 0.75rem;
+  }
+
+  /* Table scroll */
+  .data-table {
+    display: block;
+    overflow-x: auto;
   }
 }
 
