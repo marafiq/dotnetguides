@@ -2621,6 +2621,7 @@ h4 {
   padding: 32px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   border: 1px solid #e2e8f0;
+  overflow: visible;
 }
 
 .wizard-step-header {
@@ -2651,6 +2652,8 @@ h4 {
   align-items: center;
   margin-top: 24px;
   padding-top: 24px;
+  position: relative;
+  z-index: 10;
 }
 
 .wizard-actions-right {
