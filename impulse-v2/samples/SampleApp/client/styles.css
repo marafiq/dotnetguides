@@ -2509,3 +2509,322 @@ h4 {
     width: 100%;
   }
 }
+
+/* ========================================
+   Admission Wizard Styles
+   Multi-step form with progress tracking
+   ======================================== */
+
+.wizard-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.wizard-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.wizard-title {
+  font-size: 32px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 8px 0;
+}
+
+.wizard-subtitle {
+  font-size: 16px;
+  color: #64748b;
+}
+
+/* Progress Section */
+.wizard-progress {
+  margin-bottom: 32px;
+}
+
+.wizard-progress-bar {
+  margin-bottom: 24px;
+}
+
+.wizard-steps-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wizard-step-indicator {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.wizard-step-indicator.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.wizard-step-indicator.completed {
+  background: #f0fdf4;
+  border-color: #22c55e;
+}
+
+.wizard-step-indicator .step-number {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 14px;
+  color: #475569;
+}
+
+.wizard-step-indicator.active .step-number {
+  background: #3b82f6;
+  color: white;
+}
+
+.wizard-step-indicator.completed .step-number {
+  background: #22c55e;
+  color: white;
+}
+
+.wizard-step-indicator .step-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-align: center;
+}
+
+.wizard-step-indicator.active .step-title {
+  color: #1e40af;
+}
+
+.wizard-step-indicator.completed .step-title {
+  color: #166534;
+}
+
+/* Wizard Card */
+.wizard-card {
+  background: white;
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid #e2e8f0;
+}
+
+.wizard-step-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.wizard-step-header h2 {
+  margin: 8px 0 0 0;
+}
+
+.wizard-step-content {
+  padding: 24px 0;
+}
+
+.wizard-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Wizard Actions */
+.wizard-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 24px;
+}
+
+.wizard-actions-right {
+  display: flex;
+  gap: 12px;
+}
+
+/* Tag Input Section */
+.tag-input-section {
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.tag-input-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-top: 12px;
+}
+
+.tag-input-row > *:first-child {
+  flex: 1;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Checkbox Group */
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+/* Contacts Section */
+.contacts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.empty-contacts {
+  padding: 32px;
+  text-align: center;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 2px dashed #e2e8f0;
+}
+
+.contact-card-wizard {
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.contact-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+/* Review Step */
+.review-step {
+  gap: 24px;
+}
+
+.review-section {
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+}
+
+.review-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.review-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-contact {
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.review-contact:last-child {
+  border-bottom: none;
+}
+
+/* Consent Section */
+.consent-section {
+  padding: 20px;
+  background: #fffbeb;
+  border: 2px solid #fbbf24;
+  border-radius: 12px;
+}
+
+.consent-section h3 {
+  margin: 0 0 16px 0;
+  color: #92400e;
+}
+
+.consent-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Responsive Wizard */
+@media (max-width: 768px) {
+  .wizard-container {
+    padding: 16px;
+  }
+
+  .wizard-steps-nav {
+    flex-wrap: wrap;
+  }
+
+  .wizard-step-indicator {
+    flex: 1 1 45%;
+    min-width: 80px;
+  }
+
+  .wizard-step-indicator .step-title {
+    font-size: 10px;
+  }
+
+  .wizard-card {
+    padding: 20px;
+  }
+
+  .wizard-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .wizard-actions button {
+    width: 100%;
+  }
+
+  .wizard-actions-right {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tag-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

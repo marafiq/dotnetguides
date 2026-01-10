@@ -25,6 +25,7 @@ import { CreateResidentPage } from '../Features/Residents/CreateForm';
 import { MedicationsList, MedicationDetail } from '../Features/Medications/Components';
 import { CarePlanDetail } from '../Features/CarePlans/Components';
 import { Dashboard } from '../Features/Dashboard/Components';
+import { AdmissionWizardPage } from '../Features/Admission/AdmissionWizard';
 
 // Create Impulse context
 const ctx = createImpulseContext();
@@ -45,6 +46,9 @@ const RootLayout = () => (
         </Link>
         <Link to="/residents" className="nav-link">
           Residents
+        </Link>
+        <Link to="/admission" className="nav-link">
+          Admission
         </Link>
       </div>
     </nav>
@@ -192,6 +196,13 @@ const carePlanRoute = createRoute({
   },
 });
 
+// Admission Wizard route - Multi-step server-driven form
+const admissionWizardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admission',
+  component: AdmissionWizardPage,
+});
+
 // ========================================
 // Route Tree & Router
 // ========================================
@@ -205,6 +216,7 @@ const routeTree = rootRoute.addChildren([
   medicationsRoute,
   medicationDetailRoute,
   carePlanRoute,
+  admissionWizardRoute,
 ]);
 
 export const router = createRouter({

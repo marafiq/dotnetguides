@@ -100,6 +100,20 @@ const MOCK_DATA: Record<string, unknown> = {
       { id: 5, time: '12:00 PM', type: 'meal', title: 'Lunch', description: 'All residents', residentId: 0, residentName: '', status: 'pending' },
     ],
   },
+  '/admission/wizard': {
+    wizardId: 'mock-wizard-id',
+    title: 'Resident Admission',
+    description: 'Complete the following steps to admit a new resident to our facility.',
+    steps: [
+      { stepNumber: 1, id: 'basic-info', title: 'Basic Information', description: 'Enter the resident\'s personal information', isRequired: true, isComplete: false, fields: [] },
+      { stepNumber: 2, id: 'medical-history', title: 'Medical History', description: 'Document medical conditions, allergies, and medications', isRequired: true, isComplete: false, fields: [] },
+      { stepNumber: 3, id: 'care-preferences', title: 'Care Preferences', description: 'Set up care preferences and daily routine', isRequired: true, isComplete: false, fields: [] },
+      { stepNumber: 4, id: 'emergency-contacts', title: 'Emergency Contacts', description: 'Add at least one emergency contact', isRequired: true, isComplete: false, fields: [] },
+      { stepNumber: 5, id: 'review', title: 'Review & Confirm', description: 'Review all information and complete the admission', isRequired: true, isComplete: false, fields: [] },
+    ],
+    currentStep: 1,
+    totalSteps: 5,
+  },
 };
 
 /**
