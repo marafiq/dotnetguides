@@ -35,24 +35,27 @@
 }
 
 /* ========================================
-   CRITICAL: Global S2 Button Overrides
-   Make buttons look professional
+   CRITICAL: Global S2 Button Styling
+   Clean, professional button design
    ======================================== */
 
-/* Base button styles - target all S2 buttons */
-button {
+/* S2 Button base improvements */
+[class*="Button"] button,
+.dashboard-actions button,
+.form-actions button,
+.residents-header button,
+.profile-actions button {
   font-weight: 600 !important;
   border-radius: 10px !important;
   transition: all 0.2s ease !important;
   cursor: pointer !important;
 }
 
-/* Accent/Primary buttons - Clean blue style */
-button[style*="accent"],
-button[data-variant="accent"],
+/* Accent/Primary buttons - Clean blue gradient */
 .dashboard-actions button:last-child,
 .form-actions button[type="submit"],
-.residents-header button:last-child {
+.residents-header a button,
+.profile-actions button:last-child {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
   border: none !important;
   color: white !important;
@@ -60,21 +63,19 @@ button[data-variant="accent"],
   padding: 10px 20px !important;
 }
 
-button[style*="accent"]:hover,
-button[data-variant="accent"]:hover,
 .dashboard-actions button:last-child:hover,
 .form-actions button[type="submit"]:hover,
-.residents-header button:last-child:hover {
+.residents-header a button:hover,
+.profile-actions button:last-child:hover {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
   box-shadow: 0 6px 16px rgba(59, 130, 246, 0.45) !important;
   transform: translateY(-2px) !important;
 }
 
 /* Secondary/Outline buttons */
-button[style*="secondary"],
-button[data-variant="secondary"],
 .dashboard-actions button:first-child,
 .form-actions button:not([type="submit"]),
+.profile-actions button:first-child,
 .card-header button {
   background: white !important;
   border: 2px solid #e2e8f0 !important;
@@ -83,14 +84,14 @@ button[data-variant="secondary"],
   padding: 8px 16px !important;
 }
 
-button[style*="secondary"]:hover,
-button[data-variant="secondary"]:hover,
 .dashboard-actions button:first-child:hover,
 .form-actions button:not([type="submit"]):hover,
+.profile-actions button:first-child:hover,
 .card-header button:hover {
   background: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
   color: #1e293b !important;
+  transform: translateY(-1px) !important;
 }
 
 /* Small View All buttons in cards */
@@ -102,7 +103,7 @@ button[data-variant="secondary"]:hover,
 }
 
 /* Add Resident button - prominent */
-.residents-header button {
+.residents-header a button {
   padding: 10px 20px !important;
   font-size: 14px !important;
 }

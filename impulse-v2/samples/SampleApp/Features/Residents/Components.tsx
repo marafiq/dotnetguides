@@ -188,7 +188,7 @@ export function ResidentDetail({ data }: ResidentDetailProps) {
           </div>
         </div>
         <div className="profile-actions">
-          <Button variant="secondary" style="outline">Edit Profile</Button>
+          <Button variant="secondary" fillStyle="outline">Edit Profile</Button>
           <Button variant="accent">Record Vitals</Button>
         </div>
       </header>

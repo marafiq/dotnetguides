@@ -51,7 +51,7 @@ export function Dashboard({ data }: DashboardProps) {
           </Text>
         </div>
         <div className="dashboard-actions">
-          <Button variant="secondary" style="outline">Export Report</Button>
+          <Button variant="secondary" fillStyle="outline">Export Report</Button>
           <Button variant="accent">+ New Resident</Button>
         </div>
       </header>
@@ -203,7 +203,7 @@ function TasksCard({ tasks }: { tasks?: readonly UpcomingTask[] }) {
           <span className="card-icon">📝</span>
           <Heading level={3} UNSAFE_className="card-title">Upcoming Tasks</Heading>
         </div>
-        <Button variant="secondary" style="outline" size="S">View All</Button>
+        <Button variant="secondary" fillStyle="outline" size="S">View All</Button>
       </div>
 
       <div className="task-list">
@@ -343,7 +343,7 @@ function ActivityCard({ activities }: { activities?: readonly RecentActivity[] }
           <span className="card-icon">🕐</span>
           <Heading level={3} UNSAFE_className="card-title">Recent Activity</Heading>
         </div>
-        <Button variant="secondary" style="outline" size="S">View All</Button>
+        <Button variant="secondary" fillStyle="outline" size="S">View All</Button>
       </div>
 
       <div className="activity-list">
