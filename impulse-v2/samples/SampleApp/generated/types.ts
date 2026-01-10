@@ -387,3 +387,96 @@ export interface GetDashboardResponse {
   medicationCompliance: MedicationComplianceData;
   todaysSchedule?: readonly DailyScheduleItem[];
 }
+
+// ========================================
+// Admission Wizard Types - Generated from Wizard.cs
+// ========================================
+
+export interface WizardFieldConfig {
+  name: string;
+  label: string;
+  type: string;
+  isRequired: boolean;
+  placeholder?: string | null;
+  helpText?: string | null;
+  options?: readonly string[] | null;
+}
+
+export interface WizardStepConfig {
+  stepNumber: number;
+  id: string;
+  title: string;
+  description: string;
+  isRequired: boolean;
+  isComplete: boolean;
+  fields: readonly WizardFieldConfig[];
+}
+
+export interface GetAdmissionWizardResponse {
+  wizardId: string;
+  title: string;
+  description: string;
+  steps: readonly WizardStepConfig[];
+  currentStep: number;
+  totalSteps: number;
+}
+
+export interface BasicInfoStepRequest {
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  admissionDate: string;
+  roomPreference?: string | null;
+}
+
+export interface MedicalHistoryStepRequest {
+  existingConditions: readonly string[];
+  allergies: readonly string[];
+  currentMedications: readonly string[];
+  primaryCarePhysician?: string | null;
+  physicianPhone?: string | null;
+  specialInstructions?: string | null;
+}
+
+export interface CarePreferencesStepRequest {
+  dietaryRestrictions?: string | null;
+  mobilityLevel: string;
+  communicationPreference: string;
+  prefersMorningCare: boolean;
+  prefersEveningCare: boolean;
+  requiresPrivateRoom: boolean;
+  additionalNotes?: string | null;
+}
+
+export interface WizardEmergencyContact {
+  name: string;
+  relationship: string;
+  phone: string;
+  email?: string | null;
+  isPrimaryContact: boolean;
+}
+
+export interface EmergencyContactsStepRequest {
+  contacts: readonly WizardEmergencyContact[];
+}
+
+export interface ValidateStepResponse {
+  isValid: boolean;
+  stepId: string;
+  message: string;
+}
+
+export interface CompleteAdmissionRequest {
+  basicInfo: BasicInfoStepRequest;
+  medicalHistory: MedicalHistoryStepRequest;
+  carePreferences: CarePreferencesStepRequest;
+  emergencyContacts: EmergencyContactsStepRequest;
+  acceptsTerms: boolean;
+  authorizesRelease: boolean;
+}
+
+export interface CompleteAdmissionResponse {
+  residentId: number;
+  confirmationNumber: string;
+  createdAt: string;
+}

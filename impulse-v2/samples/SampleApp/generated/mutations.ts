@@ -150,3 +150,97 @@ export function useAddAssessmentMutation(ctx: ImpulseContext) {
   });
 }
 
+// ========================================
+// Admission Wizard Mutations - Generated from Wizard.cs
+// ========================================
+
+/**
+ * Mutation hook for ValidateBasicInfo
+ * POST /admission/wizard/validate/basic-info
+ */
+export function useValidateBasicInfoMutation(ctx: ImpulseContext) {
+  return useMutation({
+    mutationFn: async (data: Types.BasicInfoStepRequest) => {
+      const validated = Schemas.BasicInfoStepRequestSchema.parse(data);
+      return ctx.impulseMutate<Types.BasicInfoStepRequest, Types.ValidateStepResponse>(
+        RoutePaths.ValidateBasicInfo,
+        validated,
+        'POST'
+      );
+    },
+  });
+}
+
+/**
+ * Mutation hook for ValidateMedicalHistory
+ * POST /admission/wizard/validate/medical-history
+ */
+export function useValidateMedicalHistoryMutation(ctx: ImpulseContext) {
+  return useMutation({
+    mutationFn: async (data: Types.MedicalHistoryStepRequest) => {
+      const validated = Schemas.MedicalHistoryStepRequestSchema.parse(data);
+      return ctx.impulseMutate<Types.MedicalHistoryStepRequest, Types.ValidateStepResponse>(
+        RoutePaths.ValidateMedicalHistory,
+        validated,
+        'POST'
+      );
+    },
+  });
+}
+
+/**
+ * Mutation hook for ValidateCarePreferences
+ * POST /admission/wizard/validate/care-preferences
+ */
+export function useValidateCarePreferencesMutation(ctx: ImpulseContext) {
+  return useMutation({
+    mutationFn: async (data: Types.CarePreferencesStepRequest) => {
+      const validated = Schemas.CarePreferencesStepRequestSchema.parse(data);
+      return ctx.impulseMutate<Types.CarePreferencesStepRequest, Types.ValidateStepResponse>(
+        RoutePaths.ValidateCarePreferences,
+        validated,
+        'POST'
+      );
+    },
+  });
+}
+
+/**
+ * Mutation hook for ValidateEmergencyContacts
+ * POST /admission/wizard/validate/emergency-contacts
+ */
+export function useValidateEmergencyContactsMutation(ctx: ImpulseContext) {
+  return useMutation({
+    mutationFn: async (data: Types.EmergencyContactsStepRequest) => {
+      const validated = Schemas.EmergencyContactsStepRequestSchema.parse(data);
+      return ctx.impulseMutate<Types.EmergencyContactsStepRequest, Types.ValidateStepResponse>(
+        RoutePaths.ValidateEmergencyContacts,
+        validated,
+        'POST'
+      );
+    },
+  });
+}
+
+/**
+ * Mutation hook for CompleteAdmission
+ * POST /admission/wizard/complete
+ */
+export function useCompleteAdmissionMutation(ctx: ImpulseContext) {
+  const router = useRouter();
+
+  return useMutation({
+    mutationFn: async (data: Types.CompleteAdmissionRequest) => {
+      const validated = Schemas.CompleteAdmissionRequestSchema.parse(data);
+      return ctx.impulseMutate<Types.CompleteAdmissionRequest, Types.CompleteAdmissionResponse>(
+        RoutePaths.CompleteAdmission,
+        validated,
+        'POST'
+      );
+    },
+    onSuccess: async () => {
+      await router.invalidate();
+    },
+  });
+}
+

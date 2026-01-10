@@ -13,151 +13,106 @@ import {
   Badge,
   ActionButton,
 } from '@react-spectrum/s2';
-import { z, ZodError } from 'zod';
+import { ZodError } from 'zod';
 import { useImpulse } from '../../client/shared/ImpulseProvider';
 import { ImpulseValidationError } from '../../client/impulse-runtime';
+
+// ========================================
+// Impulse Way: Import from GENERATED files
+// Types, Schemas, and Mutations are all generated
+// from C# using impulse-gen
+// ========================================
+import type {
+  GetAdmissionWizardResponse,
+  WizardEmergencyContact,
+  BasicInfoStepRequest,
+  MedicalHistoryStepRequest,
+  CarePreferencesStepRequest,
+  EmergencyContactsStepRequest,
+  CompleteAdmissionResponse,
+} from '../../generated/types';
+
+import {
+  BasicInfoStepRequestSchema,
+  MedicalHistoryStepRequestSchema,
+  CarePreferencesStepRequestSchema,
+  EmergencyContactsStepRequestSchema,
+} from '../../generated/validation';
+
+import {
+  useValidateBasicInfoMutation,
+  useValidateMedicalHistoryMutation,
+  useValidateCarePreferencesMutation,
+  useValidateEmergencyContactsMutation,
+  useCompleteAdmissionMutation,
+} from '../../generated/mutations';
 
 // ========================================
 // Impulse Admission Wizard - The Impulse Way
 // Demonstrates:
 // - Server-driven wizard configuration
-// - Step-by-step Zod validation (client)
-// - Step-by-step ProblemDetails validation (server)
+// - Generated types from C#
+// - Generated Zod schemas for client validation
+// - Generated mutation hooks for server validation
 // - S2 Form with validationErrors per step
-// - Progress tracking and navigation
 // ========================================
 
-// ========================================
-// Types - Match server DTOs
-// ========================================
-
-interface WizardStepConfig {
-  stepNumber: number;
-  id: string;
-  title: string;
-  description: string;
-  isRequired: boolean;
-  isComplete: boolean;
-  fields: WizardFieldConfig[];
-}
-
-interface WizardFieldConfig {
-  name: string;
-  label: string;
-  type: string;
-  isRequired: boolean;
-  placeholder?: string;
-  helpText?: string;
-  options?: string[];
-}
-
-interface WizardConfig {
-  wizardId: string;
-  title: string;
-  description: string;
-  steps: WizardStepConfig[];
-  currentStep: number;
-  totalSteps: number;
-}
-
-interface EmergencyContact {
-  name: string;
-  relationship: string;
-  phone: string;
-  email: string;
-  isPrimaryContact: boolean;
-}
-
-// ========================================
-// Zod Schemas - Client-side validation per step
-// ========================================
-
-const BasicInfoSchema = z.object({
-  firstName: z.string().min(2, 'First name must be at least 2 characters'),
-  lastName: z.string().min(2, 'Last name must be at least 2 characters'),
-  dateOfBirth: z.string().min(1, 'Date of birth is required'),
-  admissionDate: z.string().min(1, 'Admission date is required'),
-  roomPreference: z.string().optional(),
-});
-
-const MedicalHistorySchema = z.object({
-  existingConditions: z.array(z.string()).optional(),
-  allergies: z.array(z.string()).optional(),
-  currentMedications: z.array(z.string()).optional(),
-  primaryCarePhysician: z.string().optional(),
-  physicianPhone: z.string().optional(),
-  specialInstructions: z.string().optional(),
-});
-
-const CarePreferencesSchema = z.object({
-  dietaryRestrictions: z.string().optional(),
-  mobilityLevel: z.string().min(1, 'Mobility level is required'),
-  communicationPreference: z.string().min(1, 'Communication preference is required'),
-  prefersMorningCare: z.boolean().optional(),
-  prefersEveningCare: z.boolean().optional(),
-  requiresPrivateRoom: z.boolean().optional(),
-  additionalNotes: z.string().optional(),
-});
-
-const EmergencyContactSchema = z.object({
-  name: z.string().min(1, 'Contact name is required'),
-  relationship: z.string().min(1, 'Relationship is required'),
-  phone: z.string().min(1, 'Phone number is required'),
-  email: z.string().email('Valid email required').or(z.string().length(0)).optional(),
-  isPrimaryContact: z.boolean(),
-});
-
-const EmergencyContactsSchema = z.object({
-  contacts: z.array(EmergencyContactSchema).min(1, 'At least one emergency contact is required'),
-});
-
+// Review schema - only local schema needed for final step
+import { z } from 'zod';
 const ReviewSchema = z.object({
   acceptsTerms: z.literal(true, { errorMap: () => ({ message: 'You must accept the terms' }) }),
   authorizesRelease: z.literal(true, { errorMap: () => ({ message: 'Authorization is required' }) }),
   additionalComments: z.string().optional(),
 });
 
-// Map step IDs to their schemas
+// Map step IDs to their generated schemas
 const stepSchemas: Record<string, z.ZodSchema> = {
-  'basic-info': BasicInfoSchema,
-  'medical-history': MedicalHistorySchema,
-  'care-preferences': CarePreferencesSchema,
-  'emergency-contacts': EmergencyContactsSchema,
+  'basic-info': BasicInfoStepRequestSchema,
+  'medical-history': MedicalHistoryStepRequestSchema,
+  'care-preferences': CarePreferencesStepRequestSchema,
+  'emergency-contacts': EmergencyContactsStepRequestSchema,
   'review': ReviewSchema,
 };
 
 // ========================================
-// Wizard Component
+// Wizard Component - Uses Generated Code
 // ========================================
 
 export function AdmissionWizard() {
   const ctx = useImpulse();
   const navigate = useNavigate();
 
-  // Wizard state
-  const [config, setConfig] = useState<WizardConfig | null>(null);
+  // Impulse Way: Use generated mutation hooks
+  const validateBasicInfo = useValidateBasicInfoMutation(ctx);
+  const validateMedicalHistory = useValidateMedicalHistoryMutation(ctx);
+  const validateCarePreferences = useValidateCarePreferencesMutation(ctx);
+  const validateEmergencyContacts = useValidateEmergencyContactsMutation(ctx);
+  const completeAdmission = useCompleteAdmissionMutation(ctx);
+
+  // Wizard state - uses generated type for config
+  const [config, setConfig] = useState<GetAdmissionWizardResponse | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isValidating, setIsValidating] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
-  // Form data for all steps
+  // Form data for all steps - matches generated types
   const [formData, setFormData] = useState({
-    // Step 1: Basic Info
+    // Step 1: Basic Info (matches BasicInfoStepRequest)
     firstName: '',
     lastName: '',
     dateOfBirth: '',
     admissionDate: '',
     roomPreference: '',
-    // Step 2: Medical History
+    // Step 2: Medical History (matches MedicalHistoryStepRequest)
     existingConditions: [] as string[],
     allergies: [] as string[],
     currentMedications: [] as string[],
     primaryCarePhysician: '',
     physicianPhone: '',
     specialInstructions: '',
-    // Step 3: Care Preferences
+    // Step 3: Care Preferences (matches CarePreferencesStepRequest)
     dietaryRestrictions: '',
     mobilityLevel: '',
     communicationPreference: '',
@@ -165,19 +120,19 @@ export function AdmissionWizard() {
     prefersEveningCare: false,
     requiresPrivateRoom: false,
     additionalNotes: '',
-    // Step 4: Emergency Contacts
-    contacts: [] as EmergencyContact[],
+    // Step 4: Emergency Contacts (matches EmergencyContactsStepRequest)
+    contacts: [] as WizardEmergencyContact[],
     // Step 5: Review
     acceptsTerms: false,
     authorizesRelease: false,
     additionalComments: '',
   });
 
-  // Load wizard configuration from server
+  // Load wizard configuration from server (uses generated response type)
   useEffect(() => {
     async function loadConfig() {
       try {
-        const response = await ctx.impulse<WizardConfig>('/admission/wizard');
+        const response = await ctx.impulse<GetAdmissionWizardResponse>('/admission/wizard');
         setConfig(response);
       } catch (err) {
         console.error('Failed to load wizard config:', err);
@@ -191,7 +146,6 @@ export function AdmissionWizard() {
   // Handle field changes
   const handleChange = useCallback((field: string, value: unknown) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user types
     if (errors[field]) {
       setErrors(prev => {
         const next = { ...prev };
@@ -201,7 +155,7 @@ export function AdmissionWizard() {
     }
   }, [errors]);
 
-  // Get current step data for validation
+  // Get current step data - returns generated request types
   const getStepData = useCallback((stepId: string) => {
     switch (stepId) {
       case 'basic-info':
@@ -210,29 +164,31 @@ export function AdmissionWizard() {
           lastName: formData.lastName,
           dateOfBirth: formData.dateOfBirth,
           admissionDate: formData.admissionDate,
-          roomPreference: formData.roomPreference,
-        };
+          roomPreference: formData.roomPreference || null,
+        } satisfies BasicInfoStepRequest;
       case 'medical-history':
         return {
           existingConditions: formData.existingConditions,
           allergies: formData.allergies,
           currentMedications: formData.currentMedications,
-          primaryCarePhysician: formData.primaryCarePhysician,
-          physicianPhone: formData.physicianPhone,
-          specialInstructions: formData.specialInstructions,
-        };
+          primaryCarePhysician: formData.primaryCarePhysician || null,
+          physicianPhone: formData.physicianPhone || null,
+          specialInstructions: formData.specialInstructions || null,
+        } satisfies MedicalHistoryStepRequest;
       case 'care-preferences':
         return {
-          dietaryRestrictions: formData.dietaryRestrictions,
+          dietaryRestrictions: formData.dietaryRestrictions || null,
           mobilityLevel: formData.mobilityLevel,
           communicationPreference: formData.communicationPreference,
           prefersMorningCare: formData.prefersMorningCare,
           prefersEveningCare: formData.prefersEveningCare,
           requiresPrivateRoom: formData.requiresPrivateRoom,
-          additionalNotes: formData.additionalNotes,
-        };
+          additionalNotes: formData.additionalNotes || null,
+        } satisfies CarePreferencesStepRequest;
       case 'emergency-contacts':
-        return { contacts: formData.contacts };
+        return {
+          contacts: formData.contacts,
+        } satisfies EmergencyContactsStepRequest;
       case 'review':
         return {
           acceptsTerms: formData.acceptsTerms,
@@ -244,7 +200,7 @@ export function AdmissionWizard() {
     }
   }, [formData]);
 
-  // Validate current step (Zod + Server)
+  // Validate step using generated mutations (Impulse way)
   const validateStep = useCallback(async (stepId: string): Promise<boolean> => {
     setErrors({});
     setIsValidating(true);
@@ -253,18 +209,34 @@ export function AdmissionWizard() {
     const schema = stepSchemas[stepId];
 
     try {
-      // Step 1: Client-side Zod validation
+      // Step 1: Client-side validation with generated Zod schema
       if (schema) {
         schema.parse(stepData);
       }
 
-      // Step 2: Server-side validation (Impulse way - ProblemDetails)
-      await ctx.impulseMutate(`/admission/wizard/validate/${stepId}`, stepData, 'POST');
+      // Step 2: Server-side validation using generated mutation hooks
+      // The Impulse way - ProblemDetails errors handled by ImpulseValidationError
+      switch (stepId) {
+        case 'basic-info':
+          await validateBasicInfo.mutateAsync(stepData as BasicInfoStepRequest);
+          break;
+        case 'medical-history':
+          await validateMedicalHistory.mutateAsync(stepData as MedicalHistoryStepRequest);
+          break;
+        case 'care-preferences':
+          await validateCarePreferences.mutateAsync(stepData as CarePreferencesStepRequest);
+          break;
+        case 'emergency-contacts':
+          await validateEmergencyContacts.mutateAsync(stepData as EmergencyContactsStepRequest);
+          break;
+        case 'review':
+          // Review step doesn't have server validation endpoint
+          break;
+      }
 
       return true;
     } catch (err) {
       if (err instanceof ZodError) {
-        // Client validation errors
         const fieldErrors: Record<string, string> = {};
         err.errors.forEach(error => {
           const path = error.path.join('.');
@@ -272,14 +244,14 @@ export function AdmissionWizard() {
         });
         setErrors(fieldErrors);
       } else if (err instanceof ImpulseValidationError) {
-        // Server validation errors (ProblemDetails)
+        // Server validation errors (ProblemDetails from generated mutations)
         setErrors(err.fieldErrors);
       }
       return false;
     } finally {
       setIsValidating(false);
     }
-  }, [ctx, getStepData]);
+  }, [getStepData, validateBasicInfo, validateMedicalHistory, validateCarePreferences, validateEmergencyContacts]);
 
   // Navigate to next step
   const handleNext = useCallback(async () => {
@@ -305,31 +277,27 @@ export function AdmissionWizard() {
     }
   }, [currentStep]);
 
-  // Submit wizard
+  // Submit wizard using generated mutation hook (Impulse way)
   const handleSubmit = useCallback(async () => {
     if (!config) return;
 
-    // Validate final step
     const step = config.steps[currentStep - 1];
     const isValid = await validateStep(step.id);
     if (!isValid) return;
 
     setIsValidating(true);
     try {
-      // Submit complete admission
-      const result = await ctx.impulseMutate<unknown, {
-        residentId: number;
-        confirmationNumber: string;
-      }>('/admission/wizard/complete', {
-        basicInfo: getStepData('basic-info'),
-        medicalHistory: getStepData('medical-history'),
-        carePreferences: getStepData('care-preferences'),
-        emergencyContacts: getStepData('emergency-contacts'),
+      // Use generated CompleteAdmissionMutation
+      const result: CompleteAdmissionResponse = await completeAdmission.mutateAsync({
+        basicInfo: getStepData('basic-info') as BasicInfoStepRequest,
+        medicalHistory: getStepData('medical-history') as MedicalHistoryStepRequest,
+        carePreferences: getStepData('care-preferences') as CarePreferencesStepRequest,
+        emergencyContacts: getStepData('emergency-contacts') as EmergencyContactsStepRequest,
         acceptsTerms: formData.acceptsTerms,
         authorizesRelease: formData.authorizesRelease,
-      }, 'POST');
+      });
 
-      // Success - navigate to confirmation or resident
+      // Navigate to new resident using response type
       navigate({ to: `/residents/${result.residentId}` });
     } catch (err) {
       if (err instanceof ImpulseValidationError) {
@@ -340,21 +308,21 @@ export function AdmissionWizard() {
     } finally {
       setIsValidating(false);
     }
-  }, [config, currentStep, validateStep, ctx, formData, getStepData, navigate]);
+  }, [config, currentStep, validateStep, completeAdmission, formData, getStepData, navigate]);
 
-  // Add emergency contact
+  // Add emergency contact (uses generated type)
   const addContact = useCallback(() => {
     setFormData(prev => ({
       ...prev,
       contacts: [
         ...prev.contacts,
-        { name: '', relationship: '', phone: '', email: '', isPrimaryContact: prev.contacts.length === 0 },
+        { name: '', relationship: '', phone: '', email: null, isPrimaryContact: prev.contacts.length === 0 },
       ],
     }));
   }, []);
 
   // Update emergency contact
-  const updateContact = useCallback((index: number, field: keyof EmergencyContact, value: unknown) => {
+  const updateContact = useCallback((index: number, field: keyof WizardEmergencyContact, value: unknown) => {
     setFormData(prev => ({
       ...prev,
       contacts: prev.contacts.map((c, i) =>
@@ -671,7 +639,6 @@ function MedicalHistoryStep({ formData, onChange }: StepProps) {
         name="specialInstructions"
         value={formData.specialInstructions as string}
         onChange={(v) => onChange('specialInstructions', v)}
-        // Note: S2 TextField doesn't have multiline - would use TextArea
       />
     </div>
   );
@@ -742,10 +709,11 @@ function CarePreferencesStep({ formData, onChange }: StepProps) {
   );
 }
 
+// Uses generated WizardEmergencyContact type
 interface EmergencyContactsStepProps {
-  contacts: EmergencyContact[];
+  contacts: WizardEmergencyContact[];
   onAdd: () => void;
-  onUpdate: (index: number, field: keyof EmergencyContact, value: unknown) => void;
+  onUpdate: (index: number, field: keyof WizardEmergencyContact, value: unknown) => void;
   onRemove: (index: number) => void;
 }
 
@@ -802,7 +770,7 @@ function EmergencyContactsStep({ contacts, onAdd, onUpdate, onRemove }: Emergenc
             <TextField
               label="Email"
               name={`contacts.${index}.email`}
-              value={contact.email}
+              value={contact.email || ''}
               onChange={(v) => onUpdate(index, 'email', v)}
             />
           </div>
@@ -811,7 +779,6 @@ function EmergencyContactsStep({ contacts, onAdd, onUpdate, onRemove }: Emergenc
             name={`contacts.${index}.isPrimaryContact`}
             isSelected={contact.isPrimaryContact}
             onChange={(v) => {
-              // Only one primary contact allowed
               contacts.forEach((_, i) => {
                 if (i !== index) onUpdate(i, 'isPrimaryContact', false);
               });
@@ -898,7 +865,7 @@ function ReviewStep({ formData, onChange }: StepProps) {
 
       <div className="review-section">
         <Heading level={3}>Emergency Contacts</Heading>
-        {(formData.contacts as EmergencyContact[])?.map((c, i) => (
+        {(formData.contacts as WizardEmergencyContact[])?.map((c, i) => (
           <div key={i} className="review-contact">
             <Text UNSAFE_className="impulse-value">
               {c.name} ({c.relationship}) - {c.phone}

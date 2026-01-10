@@ -17,6 +17,13 @@ export const RoutePaths = {
   GetCarePlan: '/residents/{residentId}/care-plan' as const,
   AddCareGoal: '/residents/{residentId}/care-plan/goals' as const,
   AddAssessment: '/residents/{residentId}/care-plan/assessments' as const,
+  // Admission Wizard endpoints - generated from Wizard.cs
+  GetAdmissionWizard: '/admission/wizard' as const,
+  ValidateBasicInfo: '/admission/wizard/validate/basic-info' as const,
+  ValidateMedicalHistory: '/admission/wizard/validate/medical-history' as const,
+  ValidateCarePreferences: '/admission/wizard/validate/care-preferences' as const,
+  ValidateEmergencyContacts: '/admission/wizard/validate/emergency-contacts' as const,
+  CompleteAdmission: '/admission/wizard/complete' as const,
 } as const;
 
 export type RoutePath = typeof RoutePaths[keyof typeof RoutePaths];

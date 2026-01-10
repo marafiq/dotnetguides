@@ -119,3 +119,55 @@ export const AddAssessmentRequestSchema = z.object({
   findings: z.record(z.string(), z.string()).optional(),
   recommendations: z.array(z.string()).optional(),
 });
+
+// ========================================
+// Admission Wizard Schemas - Generated from Wizard.cs
+// ========================================
+
+export const BasicInfoStepRequestSchema = z.object({
+  firstName: z.string().min(2, 'First name must be at least 2 characters').max(50, 'First name must be 50 characters or less'),
+  lastName: z.string().min(2, 'Last name must be at least 2 characters').max(50, 'Last name must be 50 characters or less'),
+  dateOfBirth: z.string().min(1, 'Date of birth is required'),
+  admissionDate: z.string().min(1, 'Admission date is required'),
+  roomPreference: z.string().nullable().optional(),
+});
+
+export const MedicalHistoryStepRequestSchema = z.object({
+  existingConditions: z.array(z.string()).default([]),
+  allergies: z.array(z.string()).default([]),
+  currentMedications: z.array(z.string()).default([]),
+  primaryCarePhysician: z.string().nullable().optional(),
+  physicianPhone: z.string().nullable().optional(),
+  specialInstructions: z.string().nullable().optional(),
+});
+
+export const CarePreferencesStepRequestSchema = z.object({
+  dietaryRestrictions: z.string().nullable().optional(),
+  mobilityLevel: z.string().min(1, 'Mobility level is required'),
+  communicationPreference: z.string().min(1, 'Communication preference is required'),
+  prefersMorningCare: z.boolean().default(false),
+  prefersEveningCare: z.boolean().default(false),
+  requiresPrivateRoom: z.boolean().default(false),
+  additionalNotes: z.string().nullable().optional(),
+});
+
+export const WizardEmergencyContactSchema = z.object({
+  name: z.string().min(1, 'Contact name is required'),
+  relationship: z.string().min(1, 'Relationship is required'),
+  phone: z.string().min(1, 'Phone number is required'),
+  email: z.string().email('Invalid email format').nullable().optional(),
+  isPrimaryContact: z.boolean().default(false),
+});
+
+export const EmergencyContactsStepRequestSchema = z.object({
+  contacts: z.array(WizardEmergencyContactSchema).min(1, 'At least one emergency contact is required'),
+});
+
+export const CompleteAdmissionRequestSchema = z.object({
+  basicInfo: BasicInfoStepRequestSchema,
+  medicalHistory: MedicalHistoryStepRequestSchema,
+  carePreferences: CarePreferencesStepRequestSchema,
+  emergencyContacts: EmergencyContactsStepRequestSchema,
+  acceptsTerms: z.boolean().refine(val => val === true, 'You must accept the terms and conditions'),
+  authorizesRelease: z.boolean().refine(val => val === true, 'You must authorize the release of medical information'),
+});
