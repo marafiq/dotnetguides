@@ -1,37 +1,38 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import {
-  View,
-  Flex,
-  Button,
-  Heading,
-  Text,
-  TextField,
-  Checkbox,
-  CheckboxGroup,
-  Picker,
-  Item,
-  Divider,
-  ProgressBar,
-  Badge,
-} from '@adobe/react-spectrum';
+import { Plus, Trash2, Check } from 'lucide-react';
 import { ZodError } from 'zod';
 import { useImpulse } from '../../client/shared/ImpulseProvider';
 import { ImpulseValidationError } from '../../client/impulse-runtime';
+import { Button } from '../../client/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../client/components/ui/card';
+import { Input } from '../../client/components/ui/input';
+import { Label } from '../../client/components/ui/label';
+import { Checkbox } from '../../client/components/ui/checkbox';
+import { Progress } from '../../client/components/ui/progress';
+import { Badge } from '../../client/components/ui/badge';
+import { Separator } from '../../client/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../client/components/ui/select';
 
 // ========================================
 // Impulse Way: Import from GENERATED files
 // ========================================
-import type {
-  GetAdmissionWizardResponse,
-  WizardEmergencyContact,
-  BasicInfoStepRequest,
-  MedicalHistoryStepRequest,
-  CarePreferencesStepRequest,
-  EmergencyContactsStepRequest,
-  CompleteAdmissionResponse,
-  CareLevel,
+import {
   DietaryRequirement,
+  type GetAdmissionWizardResponse,
+  type WizardEmergencyContact,
+  type BasicInfoStepRequest,
+  type MedicalHistoryStepRequest,
+  type CarePreferencesStepRequest,
+  type EmergencyContactsStepRequest,
+  type CompleteAdmissionResponse,
+  type CareLevel,
 } from '../../generated/types';
 
 import {
@@ -311,54 +312,82 @@ export function AdmissionWizard() {
 
   // Loading
   if (isLoading || !config) {
-    return <Text>Loading wizard...</Text>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   const step = config.steps[currentStep - 1];
   const progress = (currentStep / config.totalSteps) * 100;
 
   return (
-    <div className="wizard-container" data-testid="admission-wizard">
-      <header className="wizard-header">
-        <Heading level={1}>{config.title}</Heading>
-        <Text>{config.description}</Text>
-      </header>
+    <div className="max-w-3xl mx-auto space-y-6" data-testid="admission-wizard">
+      {/* Header */}
+      <div className="text-center">
+        <h1 className="text-3xl font-bold tracking-tight">{config.title}</h1>
+        <p className="text-muted-foreground mt-2">{config.description}</p>
+      </div>
 
-      <div className="wizard-progress">
-        <ProgressBar
-          label={`Step ${currentStep} of ${config.totalSteps}`}
-          value={progress}
-        />
-        <div className="wizard-steps-nav">
-          {config.steps.map((s, i) => (
-            <div
-              key={s.id}
-              className={`wizard-step-indicator ${i + 1 === currentStep ? 'active' : ''} ${completedSteps.has(i + 1) ? 'completed' : ''}`}
-              data-testid={i + 1 === currentStep ? `${s.id}-step` : undefined}
-            >
-              <span className="step-number">{completedSteps.has(i + 1) ? '✓' : i + 1}</span>
-              <span className="step-title">{s.title}</span>
-            </div>
-          ))}
+      {/* Progress */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>Step {currentStep} of {config.totalSteps}</span>
+          <span>{Math.round(progress)}% complete</span>
+        </div>
+        <Progress value={progress} className="h-2" />
+
+        {/* Step indicators */}
+        <div className="flex justify-between">
+          {config.steps.map((s, i) => {
+            const stepNum = i + 1;
+            const isActive = stepNum === currentStep;
+            const isCompleted = completedSteps.has(stepNum);
+
+            return (
+              <div
+                key={s.id}
+                className={`flex flex-col items-center gap-1 ${isActive ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-muted-foreground'}`}
+                data-testid={isActive ? `${s.id}-step` : undefined}
+              >
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
+                    isActive
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : isCompleted
+                      ? 'border-green-600 bg-green-600 text-white'
+                      : 'border-muted-foreground/30 bg-background'
+                  }`}
+                >
+                  {isCompleted ? <Check className="h-4 w-4" /> : stepNum}
+                </div>
+                <span className="text-xs font-medium hidden sm:block">{s.title}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <View UNSAFE_className="wizard-card" backgroundColor="gray-50" padding="size-400" borderRadius="medium">
-        <div className="wizard-step-header">
-          <Badge variant="info">Step {currentStep}</Badge>
-          <Heading level={2}>{step.title}</Heading>
-          <Text UNSAFE_className="step-description">{step.description}</Text>
-        </div>
-
-        <Divider />
-
-        {errors.form && (
-          <div className="form-error">
-            <Text UNSAFE_className="error-text">{errors.form}</Text>
+      {/* Step Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Badge variant="info">Step {currentStep}</Badge>
           </div>
-        )}
+          <CardTitle className="text-xl">{step.title}</CardTitle>
+          <CardDescription>{step.description}</CardDescription>
+        </CardHeader>
 
-        <div className="wizard-step-content">
+        <Separator />
+
+        <CardContent className="pt-6">
+          {errors.form && (
+            <div className="mb-6 p-3 rounded-md bg-destructive/10 border border-destructive/20">
+              <p className="text-sm text-destructive">{errors.form}</p>
+            </div>
+          )}
+
           {step.id === 'basic-info' && (
             <BasicInfoStep formData={formData} errors={errors} onChange={handleChange} />
           )}
@@ -380,15 +409,15 @@ export function AdmissionWizard() {
           {step.id === 'review' && (
             <ReviewStep formData={formData} errors={errors} onChange={handleChange} />
           )}
-        </div>
+        </CardContent>
 
-        <Divider />
+        <Separator />
 
-        <div className="wizard-actions">
+        <div className="p-6 flex justify-between">
           <Button
-            variant="secondary"
-            onPress={handleBack}
-            isDisabled={currentStep === 1}
+            variant="outline"
+            onClick={handleBack}
+            disabled={currentStep === 1}
             data-testid="back-button"
           >
             Back
@@ -396,25 +425,23 @@ export function AdmissionWizard() {
 
           {currentStep < config.totalSteps ? (
             <Button
-              variant="accent"
-              onPress={handleNext}
-              isPending={isValidating}
+              onClick={handleNext}
+              isLoading={isValidating}
               data-testid="next-button"
             >
               {isValidating ? 'Validating...' : 'Next'}
             </Button>
           ) : (
             <Button
-              variant="accent"
-              onPress={handleSubmit}
-              isPending={isValidating}
+              onClick={handleSubmit}
+              isLoading={isValidating}
               data-testid="next-button"
             >
               {isValidating ? 'Submitting...' : 'Complete Admission'}
             </Button>
           )}
         </div>
-      </View>
+      </Card>
     </div>
   );
 }
@@ -429,110 +456,194 @@ interface StepProps {
   onChange: (field: string, value: unknown) => void;
 }
 
-function BasicInfoStep({ formData, onChange }: StepProps) {
+function BasicInfoStep({ formData, errors, onChange }: StepProps) {
   return (
-    <div className="wizard-fields">
-      <div className="form-row">
-        <TextField
-          label="First Name *"
-          name="firstName"
-          value={formData.firstName as string}
-          onChange={(v) => onChange('firstName', v)}
-          isRequired
-          data-testid="input-firstName"
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="firstName">
+            First Name <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="firstName"
+            name="firstName"
+            value={formData.firstName as string}
+            onChange={(e) => onChange('firstName', e.target.value)}
+            error={errors.firstName}
+            data-testid="input-firstName"
+          />
+          {errors.firstName && (
+            <p className="text-xs text-destructive">{errors.firstName}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="lastName">
+            Last Name <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="lastName"
+            name="lastName"
+            value={formData.lastName as string}
+            onChange={(e) => onChange('lastName', e.target.value)}
+            error={errors.lastName}
+            data-testid="input-lastName"
+          />
+          {errors.lastName && (
+            <p className="text-xs text-destructive">{errors.lastName}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="dateOfBirth">
+          Date of Birth <span className="text-destructive">*</span>
+        </Label>
+        <Input
+          id="dateOfBirth"
+          name="dateOfBirth"
+          type="date"
+          value={formData.dateOfBirth as string}
+          onChange={(e) => onChange('dateOfBirth', e.target.value)}
+          error={errors.dateOfBirth}
+          data-testid="input-dateOfBirth"
         />
-        <TextField
-          label="Last Name *"
-          name="lastName"
-          value={formData.lastName as string}
-          onChange={(v) => onChange('lastName', v)}
-          isRequired
-          data-testid="input-lastName"
+        {errors.dateOfBirth && (
+          <p className="text-xs text-destructive">{errors.dateOfBirth}</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="roomPreference">Room Preference</Label>
+        <Input
+          id="roomPreference"
+          name="roomPreference"
+          value={formData.roomPreference as string}
+          onChange={(e) => onChange('roomPreference', e.target.value)}
+          placeholder="e.g., Ground floor, near garden"
         />
       </div>
-      <TextField
-        label="Date of Birth *"
-        name="dateOfBirth"
-        type="date"
-        value={formData.dateOfBirth as string}
-        onChange={(v) => onChange('dateOfBirth', v)}
-        isRequired
-        data-testid="input-dateOfBirth"
-      />
-      <TextField
-        label="Room Preference"
-        name="roomPreference"
-        value={formData.roomPreference as string}
-        onChange={(v) => onChange('roomPreference', v)}
-      />
     </div>
   );
 }
 
-function MedicalHistoryStep({ formData, onChange }: StepProps) {
+function MedicalHistoryStep({ formData, errors, onChange }: StepProps) {
   return (
-    <div className="wizard-fields">
-      <TextField
-        label="Existing Conditions"
-        name="conditions"
-        value={(formData.existingConditions as string[]).join('\n')}
-        onChange={(v) => onChange('existingConditions', v.split('\n').filter(Boolean))}
-        description="One per line"
-        data-testid="input-conditions"
-      />
-      <TextField
-        label="Current Medications"
-        name="medications"
-        value={(formData.currentMedications as string[]).join('\n')}
-        onChange={(v) => onChange('currentMedications', v.split('\n').filter(Boolean))}
-        description="One per line"
-        data-testid="input-medications"
-      />
-      <TextField
-        label="Primary Care Physician"
-        name="primaryCarePhysician"
-        value={formData.primaryCarePhysician as string}
-        onChange={(v) => onChange('primaryCarePhysician', v)}
-      />
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="existingConditions">Existing Conditions</Label>
+        <textarea
+          id="existingConditions"
+          name="existingConditions"
+          className="flex min-h-[100px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          value={(formData.existingConditions as string[]).join('\n')}
+          onChange={(e) => onChange('existingConditions', e.target.value.split('\n').filter(Boolean))}
+          placeholder="Enter one condition per line"
+          data-testid="input-conditions"
+        />
+        <p className="text-xs text-muted-foreground">One condition per line</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="currentMedications">Current Medications</Label>
+        <textarea
+          id="currentMedications"
+          name="currentMedications"
+          className="flex min-h-[100px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          value={(formData.currentMedications as string[]).join('\n')}
+          onChange={(e) => onChange('currentMedications', e.target.value.split('\n').filter(Boolean))}
+          placeholder="Enter one medication per line"
+          data-testid="input-medications"
+        />
+        <p className="text-xs text-muted-foreground">One medication per line</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="primaryCarePhysician">Primary Care Physician</Label>
+        <Input
+          id="primaryCarePhysician"
+          name="primaryCarePhysician"
+          value={formData.primaryCarePhysician as string}
+          onChange={(e) => onChange('primaryCarePhysician', e.target.value)}
+          placeholder="Dr. Smith"
+        />
+      </div>
     </div>
   );
 }
 
-function CarePreferencesStep({ formData, onChange }: StepProps) {
+function CarePreferencesStep({ formData, errors, onChange }: StepProps) {
+  const dietaryOptions: { value: DietaryRequirement; label: string }[] = [
+    { value: DietaryRequirement.Regular, label: 'Regular' },
+    { value: DietaryRequirement.Diabetic, label: 'Diabetic' },
+    { value: DietaryRequirement.LowSodium, label: 'Low Sodium' },
+    { value: DietaryRequirement.Vegetarian, label: 'Vegetarian' },
+    { value: DietaryRequirement.GlutenFree, label: 'Gluten Free' },
+  ];
+
+  const toggleDietary = (value: DietaryRequirement) => {
+    const current = formData.dietaryRequirements as DietaryRequirement[];
+    if (current.includes(value)) {
+      onChange('dietaryRequirements', current.filter(v => v !== value));
+    } else {
+      onChange('dietaryRequirements', [...current, value]);
+    }
+  };
+
   return (
-    <div className="wizard-fields">
-      <Picker
-        label="Care Level *"
-        selectedKey={formData.careLevel as string}
-        onSelectionChange={(key) => onChange('careLevel', key)}
-        data-testid="input-careLevel"
-      >
-        <Item key="Independent">Independent</Item>
-        <Item key="Assisted">Assisted</Item>
-        <Item key="FullCare">Full Care</Item>
-        <Item key="Memory">Memory Care</Item>
-      </Picker>
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="careLevel">
+          Care Level <span className="text-destructive">*</span>
+        </Label>
+        <Select
+          value={formData.careLevel as string}
+          onValueChange={(value) => onChange('careLevel', value)}
+        >
+          <SelectTrigger data-testid="input-careLevel">
+            <SelectValue placeholder="Select care level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Independent">Independent</SelectItem>
+            <SelectItem value="Assisted">Assisted</SelectItem>
+            <SelectItem value="FullCare">Full Care</SelectItem>
+            <SelectItem value="Memory">Memory Care</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-      <CheckboxGroup
-        label="Dietary Requirements"
-        value={formData.dietaryRequirements as string[]}
-        onChange={(v) => onChange('dietaryRequirements', v)}
-      >
-        <Checkbox value="Regular">Regular</Checkbox>
-        <Checkbox value="Diabetic">Diabetic</Checkbox>
-        <Checkbox value="LowSodium" data-testid="checkbox-LowSodium">Low Sodium</Checkbox>
-        <Checkbox value="Vegetarian">Vegetarian</Checkbox>
-        <Checkbox value="GlutenFree">Gluten Free</Checkbox>
-      </CheckboxGroup>
+      <div className="space-y-3">
+        <Label>Dietary Requirements</Label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {dietaryOptions.map((option) => (
+            <div key={option.value} className="flex items-center space-x-2">
+              <Checkbox
+                id={`dietary-${option.value}`}
+                checked={(formData.dietaryRequirements as string[]).includes(option.value)}
+                onCheckedChange={() => toggleDietary(option.value)}
+                data-testid={option.value === 'LowSodium' ? 'checkbox-LowSodium' : undefined}
+              />
+              <Label
+                htmlFor={`dietary-${option.value}`}
+                className="text-sm font-normal cursor-pointer"
+              >
+                {option.label}
+              </Label>
+            </div>
+          ))}
+        </div>
+      </div>
 
-      <Checkbox
-        name="requiresNightChecks"
-        isSelected={formData.requiresNightChecks as boolean}
-        onChange={(v) => onChange('requiresNightChecks', v)}
-        data-testid="checkbox-requiresNightChecks"
-      >
-        Requires Night Checks
-      </Checkbox>
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="requiresNightChecks"
+          checked={formData.requiresNightChecks as boolean}
+          onCheckedChange={(checked) => onChange('requiresNightChecks', checked)}
+          data-testid="checkbox-requiresNightChecks"
+        />
+        <Label htmlFor="requiresNightChecks" className="text-sm font-normal cursor-pointer">
+          Requires Night Checks
+        </Label>
+      </div>
     </div>
   );
 }
@@ -545,108 +656,164 @@ interface EmergencyContactsStepProps {
   onRemove: (index: number) => void;
 }
 
-function EmergencyContactsStep({ contacts, onAdd, onUpdate, onRemove }: EmergencyContactsStepProps) {
+function EmergencyContactsStep({ contacts, errors, onAdd, onUpdate, onRemove }: EmergencyContactsStepProps) {
   return (
-    <div className="wizard-fields">
-      <div className="contacts-header">
-        <Text>Emergency Contacts</Text>
-        <Button variant="secondary" onPress={onAdd}>+ Add Contact</Button>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="font-medium">Emergency Contacts</h4>
+          <p className="text-sm text-muted-foreground">At least one contact is required</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onAdd}>
+          <Plus className="h-4 w-4 mr-1" />
+          Add Contact
+        </Button>
       </div>
 
       {contacts.length === 0 && (
-        <Text>No emergency contacts added. At least one required.</Text>
+        <div className="text-center py-8 border-2 border-dashed rounded-lg">
+          <p className="text-muted-foreground">No emergency contacts added yet.</p>
+          <Button variant="outline" size="sm" onClick={onAdd} className="mt-2">
+            <Plus className="h-4 w-4 mr-1" />
+            Add First Contact
+          </Button>
+        </div>
       )}
 
       {contacts.map((contact, index) => (
-        <View key={index} UNSAFE_className="contact-card" backgroundColor="gray-100" padding="size-200" borderRadius="small">
-          <div className="contact-header">
-            <Badge variant={contact.isPrimaryContact ? 'positive' : 'neutral'}>
-              {contact.isPrimaryContact ? 'Primary' : `Contact ${index + 1}`}
-            </Badge>
-            <Button variant="secondary" onPress={() => onRemove(index)}>Remove</Button>
-          </div>
+        <Card key={index} className="bg-muted/50">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between mb-4">
+              <Badge variant={contact.isPrimaryContact ? 'success' : 'secondary'}>
+                {contact.isPrimaryContact ? 'Primary Contact' : `Contact ${index + 1}`}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRemove(index)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
 
-          <div className="form-row">
-            <TextField
-              label="Name *"
-              name={`contacts.${index}.name`}
-              value={contact.name}
-              onChange={(v) => onUpdate(index, 'name', v)}
-              isRequired
-              data-testid="input-primaryContactName"
-            />
-            <TextField
-              label="Relationship *"
-              name={`contacts.${index}.relationship`}
-              value={contact.relationship}
-              onChange={(v) => onUpdate(index, 'relationship', v)}
-              isRequired
-              data-testid="input-primaryContactRelationship"
-            />
-          </div>
-          <TextField
-            label="Phone *"
-            name={`contacts.${index}.phone`}
-            value={contact.phone}
-            onChange={(v) => onUpdate(index, 'phone', v)}
-            isRequired
-            data-testid="input-primaryContactPhone"
-          />
-        </View>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor={`contact-name-${index}`}>
+                  Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id={`contact-name-${index}`}
+                  value={contact.name}
+                  onChange={(e) => onUpdate(index, 'name', e.target.value)}
+                  data-testid="input-primaryContactName"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`contact-relationship-${index}`}>
+                  Relationship <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id={`contact-relationship-${index}`}
+                  value={contact.relationship}
+                  onChange={(e) => onUpdate(index, 'relationship', e.target.value)}
+                  placeholder="e.g., Son, Daughter"
+                  data-testid="input-primaryContactRelationship"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <Label htmlFor={`contact-phone-${index}`}>
+                Phone <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id={`contact-phone-${index}`}
+                value={contact.phone}
+                onChange={(e) => onUpdate(index, 'phone', e.target.value)}
+                placeholder="(555) 123-4567"
+                data-testid="input-primaryContactPhone"
+              />
+            </div>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
 }
 
-function ReviewStep({ formData, onChange }: StepProps) {
+function ReviewStep({ formData, errors, onChange }: StepProps) {
   return (
-    <div className="wizard-fields review-step">
-      <div className="review-section">
-        <Heading level={3}>Basic Information</Heading>
-        <div className="review-grid">
-          <div className="review-item">
-            <Text UNSAFE_className="label">Name</Text>
-            <Text>{String(formData.firstName || '')} {String(formData.lastName || '')}</Text>
+    <div className="space-y-6">
+      {/* Basic Information Summary */}
+      <div className="space-y-3">
+        <h3 className="font-semibold">Basic Information</h3>
+        <div className="grid gap-2 sm:grid-cols-2 text-sm">
+          <div>
+            <span className="text-muted-foreground">Name: </span>
+            <span className="font-medium">
+              {String(formData.firstName || '')} {String(formData.lastName || '')}
+            </span>
           </div>
-          <div className="review-item">
-            <Text UNSAFE_className="label">Date of Birth</Text>
-            <Text>{String(formData.dateOfBirth) || '—'}</Text>
+          <div>
+            <span className="text-muted-foreground">Date of Birth: </span>
+            <span className="font-medium">{String(formData.dateOfBirth) || '—'}</span>
           </div>
         </div>
       </div>
 
-      <Divider />
+      <Separator />
 
-      <div className="review-section">
-        <Heading level={3}>Care Preferences</Heading>
-        <div className="review-item">
-          <Text UNSAFE_className="label">Care Level</Text>
-          <Text>{String(formData.careLevel || '')}</Text>
+      {/* Care Preferences Summary */}
+      <div className="space-y-3">
+        <h3 className="font-semibold">Care Preferences</h3>
+        <div className="text-sm">
+          <span className="text-muted-foreground">Care Level: </span>
+          <Badge variant="info">{String(formData.careLevel || '')}</Badge>
         </div>
       </div>
 
-      <Divider />
+      <Separator />
 
-      <div className="consent-section">
-        <Heading level={3}>Consent & Authorization</Heading>
-        <Checkbox
-          name="acceptsTerms"
-          isSelected={formData.acceptsTerms as boolean}
-          onChange={(v) => onChange('acceptsTerms', v)}
-          isRequired
-          data-testid="checkbox-consent"
-        >
-          I accept the terms and conditions *
-        </Checkbox>
-        <Checkbox
-          name="authorizesRelease"
-          isSelected={formData.authorizesRelease as boolean}
-          onChange={(v) => onChange('authorizesRelease', v)}
-          isRequired
-          data-testid="checkbox-terms"
-        >
-          I authorize release of information *
-        </Checkbox>
+      {/* Consent */}
+      <div className="space-y-4">
+        <h3 className="font-semibold">Consent & Authorization</h3>
+
+        <div className="space-y-3">
+          <div className="flex items-start space-x-2">
+            <Checkbox
+              id="acceptsTerms"
+              checked={formData.acceptsTerms as boolean}
+              onCheckedChange={(checked) => onChange('acceptsTerms', checked)}
+              data-testid="checkbox-consent"
+            />
+            <div className="grid gap-1.5 leading-none">
+              <Label htmlFor="acceptsTerms" className="text-sm font-normal cursor-pointer">
+                I accept the terms and conditions <span className="text-destructive">*</span>
+              </Label>
+              {errors.acceptsTerms && (
+                <p className="text-xs text-destructive">{errors.acceptsTerms}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-start space-x-2">
+            <Checkbox
+              id="authorizesRelease"
+              checked={formData.authorizesRelease as boolean}
+              onCheckedChange={(checked) => onChange('authorizesRelease', checked)}
+              data-testid="checkbox-terms"
+            />
+            <div className="grid gap-1.5 leading-none">
+              <Label htmlFor="authorizesRelease" className="text-sm font-normal cursor-pointer">
+                I authorize release of information <span className="text-destructive">*</span>
+              </Label>
+              {errors.authorizesRelease && (
+                <p className="text-xs text-destructive">{errors.authorizesRelease}</p>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -658,7 +825,7 @@ function ReviewStep({ formData, onChange }: StepProps) {
 
 export function AdmissionWizardPage() {
   return (
-    <div className="form-container">
+    <div className="py-6">
       <AdmissionWizard />
     </div>
   );

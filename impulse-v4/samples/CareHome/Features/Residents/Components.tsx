@@ -1,19 +1,12 @@
 import { useEffect, useState } from 'react';
-import {
-  View,
-  Heading,
-  Text,
-  Button,
-  Badge,
-} from '@adobe/react-spectrum';
+import { Link } from '@tanstack/react-router';
+import { UserPlus, ArrowLeft, User, Home as HomeIcon, Heart, Calendar } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../client/components/ui/card';
+import { Button } from '../../client/components/ui/button';
+import { Badge } from '../../client/components/ui/badge';
 import { useImpulse } from '../../client/shared/ImpulseProvider';
 import type { ListResidentsResponse, ResidentSummary } from '../../generated/types';
 import { RoutePaths } from '../../generated/routePaths';
-
-// ========================================
-// Residents List - Vertical Slice Component
-// Fetches data via Impulse, renders with S2
-// ========================================
 
 export function ResidentsList() {
   const ctx = useImpulse();
@@ -35,52 +28,71 @@ export function ResidentsList() {
   }, [ctx]);
 
   if (isLoading) {
-    return <Text>Loading residents...</Text>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   if (!data) {
-    return <Text>Failed to load residents</Text>;
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Failed to load residents</p>
+      </div>
+    );
   }
 
   return (
-    <div className="residents-page" data-testid="residents-list">
-      <header className="page-header">
-        <Heading level={1}>Residents</Heading>
-        <a href="/admission/wizard">
-          <Button variant="accent">+ New Admission</Button>
-        </a>
-      </header>
-
-      <View UNSAFE_className="residents-card" backgroundColor="gray-50" padding="size-400" borderRadius="medium">
-        <div className="card-header">
-          <Heading level={2}>All Residents ({data.totalCount})</Heading>
+    <div data-testid="residents-list" className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Residents</h1>
+          <p className="text-muted-foreground">{data.totalCount} total residents</p>
         </div>
+        <Link to="/admission/wizard">
+          <Button>
+            <UserPlus className="mr-2 h-4 w-4" />
+            New Admission
+          </Button>
+        </Link>
+      </div>
 
-        <div className="residents-list" data-testid="residents-table">
-          {data.residents.map((resident) => (
-            <a key={resident.id} href={`/residents/${resident.id}`} className="resident-row">
-              <div className="resident-name">
-                {resident.firstName} {resident.lastName}
-              </div>
-              <div className="resident-room">{resident.roomNumber}</div>
-              <div className="resident-care">
-                <CareLevelBadge level={resident.careLevel} />
-              </div>
-              <div className="resident-age">{resident.age}</div>
-              <div className="resident-status">
-                <StatusBadge status={resident.status} />
-              </div>
-            </a>
-          ))}
-        </div>
-      </View>
+      <Card>
+        <CardHeader>
+          <CardTitle>All Residents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="divide-y" data-testid="residents-table">
+            {data.residents.map((resident) => (
+              <Link
+                key={resident.id}
+                to={`/residents/${resident.id}` as '/residents/$id'}
+                params={{ id: String(resident.id) }}
+                className="flex items-center justify-between py-4 hover:bg-slate-50 -mx-6 px-6 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">{resident.firstName} {resident.lastName}</p>
+                    <p className="text-sm text-muted-foreground">Room {resident.roomNumber}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <CareLevelBadge level={resident.careLevel} />
+                  <span className="text-sm text-muted-foreground w-16">{resident.age} years</span>
+                  <StatusBadge status={resident.status} />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-
-// ========================================
-// Resident Detail
-// ========================================
 
 interface ResidentDetailProps {
   id: number;
@@ -106,60 +118,81 @@ export function ResidentDetail({ id }: ResidentDetailProps) {
   }, [ctx, id]);
 
   if (isLoading) {
-    return <Text>Loading...</Text>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   if (!resident) {
-    return <Text>Resident not found</Text>;
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Resident not found</p>
+      </div>
+    );
   }
 
   return (
-    <div className="resident-detail">
-      <header className="page-header">
-        <a href="/residents">← Back to Residents</a>
-        <Heading level={1}>{resident.firstName} {resident.lastName}</Heading>
-      </header>
+    <div className="space-y-6 max-w-3xl">
+      <div className="flex items-center gap-4">
+        <Link to="/residents">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Residents
+          </Button>
+        </Link>
+      </div>
 
-      <View backgroundColor="gray-50" padding="size-400" borderRadius="medium">
-        <div className="detail-grid">
-          <div className="detail-item">
-            <Text UNSAFE_className="label">Room</Text>
-            <Text UNSAFE_className="value">{resident.roomNumber}</Text>
-          </div>
-          <div className="detail-item">
-            <Text UNSAFE_className="label">Care Level</Text>
-            <CareLevelBadge level={resident.careLevel} />
-          </div>
-          <div className="detail-item">
-            <Text UNSAFE_className="label">Age</Text>
-            <Text UNSAFE_className="value">{resident.age}</Text>
-          </div>
-          <div className="detail-item">
-            <Text UNSAFE_className="label">Status</Text>
-            <StatusBadge status={resident.status} />
-          </div>
+      <div className="flex items-center gap-4">
+        <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <User className="h-8 w-8 text-primary" />
         </div>
-      </View>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{resident.firstName} {resident.lastName}</h1>
+          <StatusBadge status={resident.status} />
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <DetailItem icon={<HomeIcon className="h-4 w-4" />} label="Room" value={resident.roomNumber} />
+            <DetailItem icon={<Heart className="h-4 w-4" />} label="Care Level" value={<CareLevelBadge level={resident.careLevel} />} />
+            <DetailItem icon={<Calendar className="h-4 w-4" />} label="Age" value={`${resident.age} years`} />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// ========================================
-// Helper Components
-// ========================================
+function DetailItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="h-8 w-8 rounded-md bg-slate-100 flex items-center justify-center text-slate-500">
+        {icon}
+      </div>
+      <div>
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <div className="font-medium">{value}</div>
+      </div>
+    </div>
+  );
+}
 
 function CareLevelBadge({ level }: { level: string }) {
   const variant = {
-    Independent: 'positive',
+    Independent: 'success',
     Assisted: 'info',
-    FullCare: 'yellow',
-    Memory: 'negative',
-  }[level] as 'positive' | 'info' | 'yellow' | 'negative' || 'neutral';
+    FullCare: 'warning',
+    Memory: 'destructive',
+  }[level] as 'success' | 'info' | 'warning' | 'destructive' || 'secondary';
 
   return <Badge variant={variant}>{level}</Badge>;
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const variant = status === 'Active' ? 'positive' : 'neutral';
+  const variant = status === 'Active' ? 'success' : 'secondary';
   return <Badge variant={variant}>{status}</Badge>;
 }
