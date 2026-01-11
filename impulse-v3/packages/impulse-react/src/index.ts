@@ -24,3 +24,11 @@ export {
   useImpulsePageWithParams,
   type UseImpulsePageOptions,
 } from './useImpulsePage';
+
+// Server-driven UI host
+export {
+  ImpulseHost,
+  type ImpulseHostProps,
+  type ImpulseComponentProps,
+  type ComponentRegistry,
+} from './ImpulseHost';

@@ -93,7 +93,7 @@ test.describe('Admission Wizard Feature', () => {
     await page.getByTestId('input-primaryContactRelationship').fill('Daughter');
     await page.getByTestId('next-button').click();
     await page.getByTestId('next-button').click();
-    await expect(page.getByTestId('error-consentGiven')).toBeVisible();
+    await expect(page.getByTestId('error-consent')).toBeVisible();
     await page.screenshot({ path: 'test-results/screenshots/step5-consent-errors.png' });
   });
 
