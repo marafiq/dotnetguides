@@ -56,7 +56,7 @@ public record DeferredConfig(string Key, string Path, Type ResponseType);
 public static class DeferredExtensions
 {
     private static readonly ConcurrentDictionary<Type, List<DeferredConfig>> _deferredConfigs = new();
-    private static readonly object _lock = new();
+    private static readonly Lock _lock = new();  // C# 13 Lock - more efficient than object
 
     /// <summary>
     /// Add a deferred data section to an endpoint.
@@ -80,10 +80,9 @@ public static class DeferredExtensions
             _ => [config],
             (_, existing) =>
             {
-                lock (_lock)
+                using (_lock.EnterScope())
                 {
-                    var updated = new List<DeferredConfig>(existing) { config };
-                    return updated;
+                    return [..existing, config];
                 }
             });
     }
@@ -106,7 +105,7 @@ public static class DeferredExtensions
         // Then check runtime registrations
         if (_deferredConfigs.TryGetValue(endpoint, out var runtimeConfigs))
         {
-            lock (_lock)
+            using (_lock.EnterScope())
             {
                 attributeConfigs.AddRange(runtimeConfigs);
             }
