@@ -9,9 +9,6 @@
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
     "paths": {
       "@impulse/react": ["../../packages/impulse-react/src"]
     }

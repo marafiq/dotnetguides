@@ -1,4 +1,3 @@
-/* Reset and base styles */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -12,7 +11,6 @@ body {
   background: #f5f5f5;
 }
 
-/* App layout */
 .app {
   max-width: 1200px;
   margin: 0 auto;
@@ -43,11 +41,6 @@ body {
   background: white;
   border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.app-nav button:hover {
-  background: #f0f0f0;
 }
 
 .app-nav button.active {
@@ -63,24 +56,13 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Loading and error states */
-.loading,
-.error,
-.empty {
+.loading, .error, .empty {
   padding: 40px;
   text-align: center;
   color: #666;
 }
 
-.error {
-  color: #c00;
-}
-
-/* Residents list */
-.residents-list h2 {
-  margin-bottom: 20px;
-  color: #2d5a3f;
-}
+.error { color: #c00; }
 
 .residents-table {
   width: 100%;
@@ -96,14 +78,8 @@ body {
 
 .residents-table th {
   background: #f8f8f8;
-  font-weight: 600;
 }
 
-.residents-table tr:hover {
-  background: #f5f5f5;
-}
-
-/* Wizard */
 .wizard {
   max-width: 800px;
   margin: 0 auto;
@@ -114,17 +90,6 @@ body {
   justify-content: space-between;
   margin-bottom: 30px;
   position: relative;
-}
-
-.wizard-progress::before {
-  content: '';
-  position: absolute;
-  top: 15px;
-  left: 20px;
-  right: 20px;
-  height: 2px;
-  background: #ddd;
-  z-index: 0;
 }
 
 .wizard-step {
@@ -148,12 +113,7 @@ body {
   margin-bottom: 5px;
 }
 
-.wizard-step.active .step-number {
-  border-color: #2d5a3f;
-  background: #2d5a3f;
-  color: white;
-}
-
+.wizard-step.active .step-number,
 .wizard-step.completed .step-number {
   border-color: #2d5a3f;
   background: #2d5a3f;
@@ -163,12 +123,6 @@ body {
 .step-title {
   font-size: 12px;
   color: #666;
-  text-align: center;
-}
-
-.wizard-step.active .step-title {
-  color: #2d5a3f;
-  font-weight: 600;
 }
 
 .wizard-content {
@@ -178,21 +132,9 @@ body {
   margin-bottom: 20px;
 }
 
-.wizard-content h2 {
-  margin-bottom: 10px;
-  color: #333;
-}
-
-.step-description {
-  color: #666;
-  margin-bottom: 20px;
-}
-
 .wizard-actions {
   display: flex;
   justify-content: space-between;
-  position: relative;
-  z-index: 10;
 }
 
 .wizard-actions button {
@@ -201,12 +143,10 @@ body {
   border-radius: 4px;
   cursor: pointer;
   font-size: 16px;
-  transition: all 0.2s;
 }
 
 .wizard-actions button:first-child {
   background: #e0e0e0;
-  color: #333;
 }
 
 .wizard-actions button:last-child {
@@ -219,11 +159,6 @@ body {
   cursor: not-allowed;
 }
 
-.wizard-actions button:not(:disabled):hover {
-  filter: brightness(1.1);
-}
-
-/* Form elements */
 .form-step {
   display: flex;
   flex-direction: column;
@@ -238,7 +173,6 @@ body {
 
 .form-field label {
   font-weight: 500;
-  color: #555;
 }
 
 .form-field input,
@@ -248,15 +182,6 @@ body {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 16px;
-  font-family: inherit;
-}
-
-.form-field input:focus,
-.form-field select:focus,
-.form-field textarea:focus {
-  outline: none;
-  border-color: #2d5a3f;
-  box-shadow: 0 0 0 3px rgba(45, 90, 63, 0.1);
 }
 
 .form-field .error {
@@ -277,21 +202,10 @@ body {
   cursor: pointer;
 }
 
-.checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-}
-
-/* Review step */
-.review-step {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
 .review-section {
   padding-bottom: 15px;
   border-bottom: 1px solid #ddd;
+  margin-bottom: 15px;
 }
 
 .review-section h3 {
@@ -299,19 +213,8 @@ body {
   margin-bottom: 10px;
 }
 
-.review-section p {
-  margin: 5px 0;
-}
-
 .consent-section {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  padding-top: 10px;
-}
-
-.consent-section .error {
-  color: #c00;
-  font-size: 14px;
-  margin-left: 23px;
 }

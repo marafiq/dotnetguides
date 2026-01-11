@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "generate": "dotnet run --project ../CareHome.Server -- ../CareHome.Server/bin/Debug/net10.0/CareHome.Server.dll ./src/generated"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@impulse/react": "workspace:*",

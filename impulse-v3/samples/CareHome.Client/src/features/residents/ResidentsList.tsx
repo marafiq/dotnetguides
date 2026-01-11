@@ -1,36 +1,26 @@
 import { useImpulsePage } from '@impulse/react';
-
-// Types would be generated, but showing inline for demo
-interface ResidentSummary {
-  id: number;
-  fullName: string;
-  roomNumber: string | null;
-  careLevel: string;
-  age: number;
-}
-
-interface ListResidentsResponse {
-  residents: ResidentSummary[];
-  totalCount: number;
-}
+import type { ListResidentsResponse } from '../../generated/types';
+import { RoutePaths } from '../../generated/routePaths';
 
 export function ResidentsList() {
-  const { data, isLoading, error } = useImpulsePage<ListResidentsResponse>('/residents');
+  const { data, isLoading, error } = useImpulsePage<ListResidentsResponse>(
+    RoutePaths.ListResidents
+  );
 
   if (isLoading) {
-    return <div className="loading">Loading residents...</div>;
+    return <div className="loading" data-testid="loading">Loading residents...</div>;
   }
 
   if (error) {
-    return <div className="error">Error: {error.message}</div>;
+    return <div className="error" data-testid="error">Error: {error.message}</div>;
   }
 
   if (!data) {
-    return <div className="empty">No data available</div>;
+    return <div className="empty" data-testid="empty">No data available</div>;
   }
 
   return (
-    <div className="residents-list">
+    <div className="residents-list" data-testid="residents-list">
       <h2>Residents ({data.totalCount})</h2>
       <table className="residents-table">
         <thead>
@@ -43,7 +33,7 @@ export function ResidentsList() {
         </thead>
         <tbody>
           {data.residents.map((resident) => (
-            <tr key={resident.id}>
+            <tr key={resident.id} data-testid={`resident-${resident.id}`}>
               <td>{resident.fullName}</td>
               <td>{resident.roomNumber ?? 'Unassigned'}</td>
               <td>{resident.careLevel}</td>
