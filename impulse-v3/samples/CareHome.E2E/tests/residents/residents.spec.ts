@@ -1,17 +1,15 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test.describe('Residents Feature', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-  });
-
   test('displays residents list on load', async ({ page }) => {
+    await page.goto('/');
     await expect(page.getByTestId('residents-list')).toBeVisible();
-    await expect(page.getByText('Residents')).toBeVisible();
+    await expect(page.getByText('Residents (3)')).toBeVisible();
+    await page.screenshot({ path: 'test-results/screenshots/residents-list.png' });
   });
 
   test('shows resident data in table', async ({ page }) => {
-    // Wait for data to load
+    await page.goto('/');
     await expect(page.getByTestId('residents-list')).toBeVisible();
 
     // Check table headers
@@ -19,19 +17,19 @@ test.describe('Residents Feature', () => {
     await expect(page.getByRole('columnheader', { name: 'Room' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Care Level' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Age' })).toBeVisible();
+
+    // Check resident data
+    await expect(page.getByText('John Smith')).toBeVisible();
+    await expect(page.getByText('101A')).toBeVisible();
+    await expect(page.getByText('Mary Johnson')).toBeVisible();
+
+    await page.screenshot({ path: 'test-results/screenshots/residents-table.png' });
   });
 
-  test('shows loading state initially', async ({ page }) => {
-    // Navigate with network throttling to catch loading state
-    await page.route('**/residents', async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      await route.continue();
-    });
-
+  test('can navigate to admission wizard', async ({ page }) => {
     await page.goto('/');
-
-    // Should show loading state briefly
-    const loading = page.getByTestId('loading');
-    // Loading might be too fast to catch, so we just check it doesn't error
+    await page.getByTestId('nav-admission').click();
+    await expect(page.getByTestId('admission-wizard')).toBeVisible();
+    await page.screenshot({ path: 'test-results/screenshots/nav-to-admission.png' });
   });
 });

@@ -49,6 +49,7 @@ describe('impulse-runtime', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 404,
+        headers: new Headers(),
       });
 
       await expect(impulseFetch('/not-found')).rejects.toThrow('Page not found');

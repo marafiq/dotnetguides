@@ -6,10 +6,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  reporter: [['html'], ['list']],
   use: {
-    baseURL: 'http://localhost:5000',
+    baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
+    screenshot: 'on',
+    video: 'retain-on-failure',
   },
   projects: [
     {
@@ -17,9 +19,11 @@ export default defineConfig({
       use: { browserName: 'chromium' },
     },
   ],
+  outputDir: './test-results',
+  // Using Vite dev server with mocked API
   webServer: {
-    command: 'dotnet run --project ../CareHome.Server',
-    url: 'http://localhost:5000',
+    command: 'npm run dev --prefix ../CareHome.Client',
+    url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },

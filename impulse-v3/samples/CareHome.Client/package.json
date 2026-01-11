@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@impulse/react": "workspace:*",
+    "@impulse/react": "file:../../packages/impulse-react",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-router": "^1.93.0",
     "react": "^19.0.0",
