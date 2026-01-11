@@ -31,7 +31,8 @@ public sealed class ImpulseEndpointAttribute : Attribute
 
     public ImpulseEndpointAttribute(string route, ImpulseMethod method = ImpulseMethod.Get)
     {
-        Route = route ?? throw new ArgumentNullException(nameof(route));
+        ArgumentException.ThrowIfNullOrWhiteSpace(route);
+        Route = route;
         Method = method;
     }
 }

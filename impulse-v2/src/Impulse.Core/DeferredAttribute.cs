@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace Impulse.Core;
 
 /// <summary>
@@ -32,6 +34,11 @@ public class DeferredAttribute : Attribute
 
     public DeferredAttribute(string key, string path)
     {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
         Key = key;
         Path = path;
     }
@@ -44,13 +51,16 @@ public record DeferredConfig(string Key, string Path, Type ResponseType);
 
 /// <summary>
 /// Extension methods for configuring deferred loading.
+/// Thread-safe using ConcurrentDictionary.
 /// </summary>
 public static class DeferredExtensions
 {
-    private static readonly Dictionary<Type, List<DeferredConfig>> _deferredConfigs = new();
+    private static readonly ConcurrentDictionary<Type, List<DeferredConfig>> _deferredConfigs = new();
+    private static readonly object _lock = new();
 
     /// <summary>
     /// Add a deferred data section to an endpoint.
+    /// Thread-safe registration.
     /// </summary>
     /// <typeparam name="TDeferred">The deferred response type.</typeparam>
     /// <param name="endpoint">The endpoint type.</param>
@@ -59,13 +69,23 @@ public static class DeferredExtensions
     public static void RegisterDeferred<TDeferred>(Type endpoint, string key, string path)
         where TDeferred : class
     {
-        if (!_deferredConfigs.TryGetValue(endpoint, out var configs))
-        {
-            configs = new List<DeferredConfig>();
-            _deferredConfigs[endpoint] = configs;
-        }
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        configs.Add(new DeferredConfig(key, path, typeof(TDeferred)));
+        var config = new DeferredConfig(key, path, typeof(TDeferred));
+
+        _deferredConfigs.AddOrUpdate(
+            endpoint,
+            _ => [config],
+            (_, existing) =>
+            {
+                lock (_lock)
+                {
+                    var updated = new List<DeferredConfig>(existing) { config };
+                    return updated;
+                }
+            });
     }
 
     /// <summary>
@@ -73,6 +93,8 @@ public static class DeferredExtensions
     /// </summary>
     public static IReadOnlyList<DeferredConfig> GetDeferredConfigs(Type endpoint)
     {
+        ArgumentNullException.ThrowIfNull(endpoint);
+
         // First check attributes
         var attributeConfigs = endpoint
             .GetCustomAttributes(typeof(DeferredAttribute), true)
@@ -84,7 +106,10 @@ public static class DeferredExtensions
         // Then check runtime registrations
         if (_deferredConfigs.TryGetValue(endpoint, out var runtimeConfigs))
         {
-            attributeConfigs.AddRange(runtimeConfigs);
+            lock (_lock)
+            {
+                attributeConfigs.AddRange(runtimeConfigs);
+            }
         }
 
         return attributeConfigs;
