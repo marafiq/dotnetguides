@@ -3,6 +3,7 @@ using Moj.TanStack.Ast.Core;
 using Moj.TanStack.Dsl.Core.TypeInference;
 using Moj.Sandbox.DomainModels;
 using Moj.Sandbox.Definitions;
+using Moj.Sandbox.Definitions.SeniorLiving;
 
 Console.WriteLine("=== Moj TanStack DSL - TypeScript Code Generator ===");
 Console.WriteLine("=== Using C# Type Inference ===\n");
@@ -118,12 +119,65 @@ var typesPath = Path.Combine(outputDir, "types.ts");
 File.WriteAllText(typesPath, typesTs);
 Console.WriteLine($"\nWritten: {typesPath}");
 
+// ============================================
+// SENIOR LIVING - Using Typed DSL
+// (TypeScript inferred from C# types!)
+// ============================================
+
+Console.WriteLine("\n\n=== SENIOR LIVING - Typed DSL Generation ===\n");
+
+// ============================================
+// Generate ResidentStore TypeScript
+// ============================================
+
+Console.WriteLine("--- Generating residentStore.ts ---\n");
+
+var residentStoreTs = ResidentStore.Definition.ToTypeScript();
+Console.WriteLine(residentStoreTs);
+
+var residentStorePath = Path.Combine(outputDir, "residentStore.ts");
+File.WriteAllText(residentStorePath, residentStoreTs);
+Console.WriteLine($"\nWritten: {residentStorePath}");
+
+// ============================================
+// Generate ResidentQueries TypeScript
+// ============================================
+
+Console.WriteLine("\n--- Generating residentQueries.ts ---\n");
+
+var residentQueriesTs = ResidentQueries.AllDefinitions.ToTypeScript();
+Console.WriteLine(residentQueriesTs);
+
+var residentQueriesPath = Path.Combine(outputDir, "residentQueries.ts");
+File.WriteAllText(residentQueriesPath, residentQueriesTs);
+Console.WriteLine($"\nWritten: {residentQueriesPath}");
+
+// ============================================
+// Generate SeniorLivingRouter TypeScript
+// ============================================
+
+Console.WriteLine("\n--- Generating seniorLivingRouter.ts ---\n");
+
+var seniorLivingRouterTs = SeniorLivingRouter.Definition.ToTypeScript();
+Console.WriteLine(seniorLivingRouterTs);
+
+var seniorLivingRouterPath = Path.Combine(outputDir, "seniorLivingRouter.ts");
+File.WriteAllText(seniorLivingRouterPath, seniorLivingRouterTs);
+Console.WriteLine($"\nWritten: {seniorLivingRouterPath}");
+
+// ============================================
+// Summary
+// ============================================
+
 Console.WriteLine("\n=== Generation Complete ===");
 Console.WriteLine($"\nOutput directory: {outputDir}");
 Console.WriteLine("Files generated:");
-Console.WriteLine("  - userStore.ts (TanStack Store)");
-Console.WriteLine("  - appRouter.ts (TanStack Router)");
+Console.WriteLine("  - userStore.ts (TanStack Store - low-level DSL)");
+Console.WriteLine("  - appRouter.ts (TanStack Router - low-level DSL)");
 Console.WriteLine("  - types.ts (TypeScript interfaces from C# types)");
+Console.WriteLine("  - residentStore.ts (TanStack Store - TYPED DSL)");
+Console.WriteLine("  - residentQueries.ts (TanStack Query - TYPED DSL)");
+Console.WriteLine("  - seniorLivingRouter.ts (TanStack Router - TYPED DSL)");
 
 Console.WriteLine("\n=== To validate the TypeScript: ===");
 Console.WriteLine("cd Moj/sandbox/Moj.Sandbox/test-app");
