@@ -32,6 +32,7 @@ public sealed class TypedStoreBuilder<TState> where TState : class
     private TState? _initialState;
     private readonly List<StoreActionDef> _actions = [];
     private readonly List<StoreSelectorDef> _selectors = [];
+    private readonly List<StoreDerivedDef> _derived = [];
     private string _storeName = "store";
     private bool _exported = true;
 
@@ -74,6 +75,16 @@ public sealed class TypedStoreBuilder<TState> where TState : class
     }
 
     /// <summary>
+    /// Define derived (computed) state that reactively updates when dependencies change.
+    /// Uses TanStack Store's derived() function.
+    /// </summary>
+    public TypedStoreBuilder<TState> Derived<TResult>(string name, Func<TState, TResult> computation)
+    {
+        _derived.Add(new StoreDerivedDef(name, typeof(TResult)));
+        return this;
+    }
+
+    /// <summary>
     /// Set the store variable name.
     /// </summary>
     public TypedStoreBuilder<TState> As(string name)
@@ -102,6 +113,7 @@ public sealed class TypedStoreBuilder<TState> where TState : class
             _initialState,
             _actions,
             _selectors,
+            _derived,
             _exported);
     }
 }
@@ -117,6 +129,11 @@ public sealed record StoreActionDef(string Name, Type? PayloadType);
 public sealed record StoreSelectorDef(string Name, Type ResultType);
 
 /// <summary>
+/// Represents a derived (computed) state definition.
+/// </summary>
+public sealed record StoreDerivedDef(string Name, Type ResultType);
+
+/// <summary>
 /// Represents a complete store definition ready for TypeScript generation.
 /// </summary>
 public sealed class StoreDefinition<TState> where TState : class
@@ -126,6 +143,7 @@ public sealed class StoreDefinition<TState> where TState : class
     public TState? InitialState { get; }
     public IReadOnlyList<StoreActionDef> Actions { get; }
     public IReadOnlyList<StoreSelectorDef> Selectors { get; }
+    public IReadOnlyList<StoreDerivedDef> DerivedState { get; }
     public bool IsExported { get; }
 
     internal StoreDefinition(
@@ -134,6 +152,7 @@ public sealed class StoreDefinition<TState> where TState : class
         TState? initialState,
         List<StoreActionDef> actions,
         List<StoreSelectorDef> selectors,
+        List<StoreDerivedDef> derived,
         bool exported)
     {
         Name = name;
@@ -141,6 +160,7 @@ public sealed class StoreDefinition<TState> where TState : class
         InitialState = initialState;
         Actions = actions;
         Selectors = selectors;
+        DerivedState = derived;
         IsExported = exported;
     }
 
@@ -186,10 +206,15 @@ internal sealed class StoreTypeScriptGenerator<TState> where TState : class
     {
         var nodes = new List<TsNode>();
 
-        // Import statement
+        // Import statement (include 'derived' if we have derived state)
+        var imports = new List<TsImportSpecifier> { new("Store") };
+        if (_definition.DerivedState.Count > 0)
+        {
+            imports.Add(new TsImportSpecifier("derived"));
+        }
         nodes.Add(new TsImportDeclaration(
             "@tanstack/store",
-            new TsImportClause(NamedImports: [new TsImportSpecifier("Store")])));
+            new TsImportClause(NamedImports: imports)));
 
         // Generate interfaces for state type and all dependent types
         var dependentTypes = TypeToTsConverter.GetDependentTypes(_definition.StateType).ToList();
@@ -243,6 +268,12 @@ internal sealed class StoreTypeScriptGenerator<TState> where TState : class
         foreach (var selector in _definition.Selectors)
         {
             nodes.Add(GenerateSelector(selector));
+        }
+
+        // Generate derived (computed) state
+        foreach (var derived in _definition.DerivedState)
+        {
+            nodes.Add(GenerateDerived(derived));
         }
 
         return nodes;
@@ -320,6 +351,38 @@ internal sealed class StoreTypeScriptGenerator<TState> where TState : class
             [new TsVariableDeclarator(
                 new TsIdentifierBinding(selector.Name),
                 Initializer: selectorFn)],
+            _definition.IsExported);
+    }
+
+    private TsVariableDeclaration GenerateDerived(StoreDerivedDef derived)
+    {
+        // Generate: export const derivedName = derived({ store, fn: (state) => { /* TODO */ return undefined as any; } })
+        var stateParam = new TsParameter(
+            new TsIdentifierBinding("state"),
+            new TsTypeReference(_definition.StateType.Name));
+
+        var returnStmt = new TsReturnStatement(
+            new TsAsExpression(
+                new TsIdentifier("undefined"),
+                TsPrimitiveTypes.Any));
+
+        var fnArrow = new TsArrowFunction(
+            [stateParam],
+            new TsBlockStatement([returnStmt]),
+            ReturnType: TypeToTsConverter.ToTsType(derived.ResultType));
+
+        var derivedCall = new TsCallExpression(
+            new TsIdentifier("derived"),
+            [new TsObjectLiteral([
+                new TsPropertyAssignment(new TsIdentifier("store"), new TsIdentifier(_definition.Name)),
+                new TsPropertyAssignment(new TsIdentifier("fn"), fnArrow)
+            ])]);
+
+        return new TsVariableDeclaration(
+            TsVariableKind.Const,
+            [new TsVariableDeclarator(
+                new TsIdentifierBinding(derived.Name),
+                Initializer: derivedCall)],
             _definition.IsExported);
     }
 

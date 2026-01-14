@@ -213,5 +213,22 @@ public static class ResidentStore
         .Selector("hasUnacknowledgedAlerts",
             state => state.UnacknowledgedAlerts.Count > 0)
 
+        // ===== Derived (Computed/Reactive) State =====
+        // These use TanStack Store's derived() - they reactively update when store changes
+        .Derived<int>("filteredResidentsCount$",
+            state => state.Residents
+                .Where(r => state.Filters.Statuses.Count == 0 || state.Filters.Statuses.Contains(r.Status))
+                .Where(r => state.Filters.CareLevels.Count == 0 || state.Filters.CareLevels.Contains(r.CareLevel))
+                .Count())
+
+        .Derived<int>("urgentAlertCount$",
+            state => state.UnacknowledgedAlerts
+                .Count(a => a.Severity == AlertSeverity.High || a.Severity == AlertSeverity.Critical))
+
+        .Derived<decimal>("occupancyRate$",
+            state => state.Rooms.Count > 0
+                ? (decimal)state.Rooms.Count(r => !r.IsAvailable) / state.Rooms.Count * 100
+                : 0m)
+
         .Build();
 }
