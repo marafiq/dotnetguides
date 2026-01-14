@@ -93,6 +93,12 @@ public sealed class TsArrowBuilder<TResult>
         return this;
     }
 
+    public TsArrowBuilder<TResult> Returns(TsExprBase expr)
+    {
+        _body = expr.Node;
+        return this;
+    }
+
     public TsArrowBuilder<TResult> Body(Action<TsBlockBuilder> configure)
     {
         var builder = new TsBlockBuilder();

@@ -210,7 +210,7 @@ public static class StoreExtensions
     /// <summary>
     /// Create store.setState call
     /// </summary>
-    public static TsDynamicExpr SetState<TState>(this TsExpr<object> store, TsExprBase updater) =>
+    public static TsExpr<object> SetState<TState>(this TsExpr<object> store, TsExprBase updater) =>
         store.Prop<object>("setState").Call<object>(updater);
 
     /// <summary>

@@ -1,3 +1,4 @@
+using Moj.TanStack.Ast.Core;
 using Moj.TanStack.Dsl.Core;
 using Moj.TanStack.Dsl.TanStack.Router;
 using Moj.TanStack.SourceGenerator.Attributes;

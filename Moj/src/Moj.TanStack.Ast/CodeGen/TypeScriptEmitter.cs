@@ -202,6 +202,9 @@ public sealed class TypeScriptEmitter : ITsVisitor<string>
 
         if (node.Body is TsBlockStatement block)
             sb.Append(block.Accept(this));
+        else if (node.Body is TsObjectLiteral objLiteral)
+            // Object literals in arrow function expression bodies need parens: () => ({...})
+            sb.Append($"({objLiteral.Accept(this)})");
         else if (node.Body is TsExpression expr)
             sb.Append(expr.Accept(this));
         else
@@ -475,7 +478,7 @@ public sealed class TypeScriptEmitter : ITsVisitor<string>
         {
             var stmt = s.Accept(this);
             // Add semicolon if not already present and not a block/function
-            if (!stmt.EndsWith(';') && !stmt.EndsWith('}'))
+            if (!stmt.EndsWith(";") && !stmt.EndsWith("}"))
                 stmt += ";";
             return $"{Indent()}{stmt}";
         });
@@ -608,6 +611,12 @@ public sealed class TypeScriptEmitter : ITsVisitor<string>
         sb.Append(node.Type.Accept(this));
         sb.Append(';');
         return sb.ToString();
+    }
+
+    public string Visit(TsLiteralType node)
+    {
+        // TsLiteralType wraps a TsLiteral, emit the literal's representation
+        return node.Value.Accept(this);
     }
 
     public string Visit(TsComment node)

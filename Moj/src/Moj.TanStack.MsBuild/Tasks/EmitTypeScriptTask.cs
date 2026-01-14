@@ -6,7 +6,7 @@ namespace Moj.TanStack.MsBuild.Tasks;
 /// <summary>
 /// MSBuild task that emits TypeScript files from generated C# code
 /// </summary>
-public sealed class EmitTypeScriptTask : Task
+public sealed class EmitTypeScriptTask : Microsoft.Build.Utilities.Task
 {
     /// <summary>
     /// The project directory

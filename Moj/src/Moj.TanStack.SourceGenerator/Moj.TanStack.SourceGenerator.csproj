@@ -18,9 +18,5 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
   </ItemGroup>
 
-  <!-- Include Ast library for code generation -->
-  <ItemGroup>
-    <ProjectReference Include="..\Moj.TanStack.Ast\Moj.TanStack.Ast.csproj" />
-  </ItemGroup>
 
 </Project>

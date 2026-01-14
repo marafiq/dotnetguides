@@ -1,3 +1,4 @@
+using Moj.TanStack.Ast.Core;
 using Moj.TanStack.Dsl.Core;
 using Moj.TanStack.Dsl.TanStack.Store;
 using Moj.TanStack.SourceGenerator.Attributes;
@@ -83,7 +84,7 @@ public static class UserStore
     /// The store definition using TanStack Store DSL
     /// </summary>
     public static TsVariableDeclaration Store =>
-        TanStackStore.CreateStore<IUserState>()
+        TanStackStore.CreateStore<object>()
             .WithState(InitialState)
             .As("userStore")
             .Export()

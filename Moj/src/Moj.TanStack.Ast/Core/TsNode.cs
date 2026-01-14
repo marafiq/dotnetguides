@@ -50,6 +50,7 @@ public interface ITsVisitor
     void Visit(TsParameter node);
     void Visit(TsInterfaceDeclaration node);
     void Visit(TsTypeAliasDeclaration node);
+    void Visit(TsLiteralType node);
     void Visit(TsComment node);
 }
 
@@ -94,5 +95,6 @@ public interface ITsVisitor<T>
     T Visit(TsParameter node);
     T Visit(TsInterfaceDeclaration node);
     T Visit(TsTypeAliasDeclaration node);
+    T Visit(TsLiteralType node);
     T Visit(TsComment node);
 }

@@ -91,8 +91,8 @@ public sealed record TsFunctionType(
 /// </summary>
 public sealed record TsLiteralType(TsLiteral Value) : TsType
 {
-    public override void Accept(ITsVisitor visitor) => throw new NotImplementedException();
-    public override T Accept<T>(ITsVisitor<T> visitor) => throw new NotImplementedException();
+    public override void Accept(ITsVisitor visitor) => visitor.Visit(this);
+    public override T Accept<T>(ITsVisitor<T> visitor) => visitor.Visit(this);
 }
 
 /// <summary>
