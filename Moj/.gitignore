@@ -1,0 +1,15 @@
+# Build outputs
+bin/
+obj/
+
+# Backup files
+*.bak
+
+# IDE
+.vs/
+.idea/
+*.user
+
+# NuGet
+packages/
+*.nupkg
