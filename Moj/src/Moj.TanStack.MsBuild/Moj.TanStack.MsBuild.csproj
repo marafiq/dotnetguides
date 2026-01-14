@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net8.0;netstandard2.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <RootNamespace>Moj.TanStack.MsBuild</RootNamespace>
+
+    <!-- Package info -->
+    <PackageId>Moj.TanStack.MsBuild</PackageId>
+    <Description>MSBuild tasks for generating TypeScript from TanStack DSL</Description>
+
+    <!-- Build output for MSBuild consumption -->
+    <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <NoPackageAnalysis>true</NoPackageAnalysis>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.8.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.8.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Moj.TanStack.Ast\Moj.TanStack.Ast.csproj" />
+    <ProjectReference Include="..\Moj.TanStack.Dsl\Moj.TanStack.Dsl.csproj" />
+  </ItemGroup>
+
+  <!-- Include MSBuild targets file -->
+  <ItemGroup>
+    <None Include="build\**\*" Pack="true" PackagePath="build" />
+    <None Include="buildMultiTargeting\**\*" Pack="true" PackagePath="buildMultiTargeting" />
+  </ItemGroup>
+
+</Project>

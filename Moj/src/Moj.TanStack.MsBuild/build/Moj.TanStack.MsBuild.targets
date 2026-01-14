@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <!-- Output directory for TypeScript files -->
+    <TsOutputDirectory Condition="'$(TsOutputDirectory)' == ''">Generated\ts</TsOutputDirectory>
+
+    <!-- Enable/disable TypeScript generation -->
+    <EnableTsGeneration Condition="'$(EnableTsGeneration)' == ''">true</EnableTsGeneration>
+  </PropertyGroup>
+
+  <UsingTask TaskName="Moj.TanStack.MsBuild.Tasks.EmitTypeScriptTask"
+             AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\$(TargetFramework)\Moj.TanStack.MsBuild.dll" />
+
+  <!-- Target to emit TypeScript after compilation -->
+  <Target Name="EmitTanStackTypeScript"
+          AfterTargets="Compile"
+          Condition="'$(EnableTsGeneration)' == 'true'">
+
+    <ItemGroup>
+      <_TsGeneratedFiles Include="$(IntermediateOutputPath)**\*.g.cs" />
+    </ItemGroup>
+
+    <EmitTypeScriptTask
+        ProjectDirectory="$(MSBuildProjectDirectory)"
+        OutputDirectory="$(TsOutputDirectory)"
+        GeneratedFiles="@(_TsGeneratedFiles)">
+      <Output TaskParameter="TypeScriptFiles" ItemName="TsGeneratedFiles" />
+    </EmitTypeScriptTask>
+
+    <Message Text="TanStack TypeScript files generated: @(TsGeneratedFiles)" Importance="high"
+             Condition="'@(TsGeneratedFiles)' != ''" />
+
+  </Target>
+
+  <!-- Clean target -->
+  <Target Name="CleanTanStackTypeScript"
+          BeforeTargets="Clean">
+    <ItemGroup>
+      <_FilesToClean Include="$(MSBuildProjectDirectory)\$(TsOutputDirectory)\*.ts" />
+    </ItemGroup>
+    <Delete Files="@(_FilesToClean)" />
+  </Target>
+
+</Project>
