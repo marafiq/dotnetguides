@@ -1,0 +1,31 @@
+@inherits SliceComponent<UserProfileProps>
+
+<Card Title="@Props.Name" Subtitle="@Props.JobTitle">
+    <div class="profile-content">
+        <div class="profile-header">
+            <Avatar ImageUrl="@Props.AvatarUrl" Initials="@Props.Initials" Alt="@Props.Name" />
+
+            @if (Props.IsVerified)
+            {
+                <Badge Text="Verified" Variant="success" />
+            }
+        </div>
+
+        <StatsRow Stats="@Props.Stats" />
+
+        <div class="profile-bio">
+            <p>@Props.Bio</p>
+        </div>
+
+        <SkillsList Title="Skills" Skills="@Props.Skills" />
+
+        <div class="profile-actions">
+            <Button Variant="primary" OnClick="@Props.OnFollow">
+                Follow
+            </Button>
+            <Button Variant="secondary" OnClick="@Props.OnMessage">
+                Message
+            </Button>
+        </div>
+    </div>
+</Card>

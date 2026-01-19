@@ -1,0 +1,12 @@
+@inherits SliceComponent<AvatarProps>
+
+<div class="avatar">
+    @if (Props.ImageUrl)
+    {
+        <img src="@Props.ImageUrl" alt="@Props.Alt" class="avatar-image" />
+    }
+    @if (!Props.ImageUrl)
+    {
+        <span class="avatar-fallback">@Props.Initials</span>
+    }
+</div>

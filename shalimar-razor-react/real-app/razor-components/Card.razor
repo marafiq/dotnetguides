@@ -1,0 +1,23 @@
+@inherits SliceComponent<CardProps>
+
+<div class="card">
+    @if (!string.IsNullOrEmpty(Props.Title))
+    {
+        <div class="card-header">
+            <h3 class="card-title">@Props.Title</h3>
+            @if (!string.IsNullOrEmpty(Props.Subtitle))
+            {
+                <p class="card-subtitle">@Props.Subtitle</p>
+            }
+        </div>
+    }
+    <div class="card-body">
+        @Props.Children
+    </div>
+    @if (Props.HasFooter)
+    {
+        <div class="card-footer">
+            @Props.Footer
+        </div>
+    }
+</div>

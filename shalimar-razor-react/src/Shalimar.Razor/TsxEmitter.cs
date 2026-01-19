@@ -113,30 +113,43 @@ public class TsxEmitter
         // Remove @inherits directive
         result = Regex.Replace(result, @"@inherits[^\n]+\n?", "");
 
-        // Transform class → className
+        // Transform class → className (handle interpolated values)
+        result = Regex.Replace(result, @"class=""([^""]*?)@Props\.(\w+)([^""]*?)""",
+            m => $"className={{`{m.Groups[1].Value}${{props.{m.Groups[2].Value}}}{m.Groups[3].Value}`}}");
         result = Regex.Replace(result, @"class=""([^""]+)""", "className=\"$1\"");
 
         // Transform for → htmlFor
         result = Regex.Replace(result, @"\sfor=""([^""]+)""", " htmlFor=\"$1\"");
 
-        // Transform @onclick → onClick
+        // Transform @onclick with Props reference → onClick={props.X}
+        result = Regex.Replace(result, @"@onclick=""@Props\.(\w+)""", "onClick={props.$1}");
         result = Regex.Replace(result, @"@onclick=""@(\w+)""", "onClick={$1}");
-        result = Regex.Replace(result, @"@onclick=""@\(\(\)\s*=>\s*([^)]+)\(\)\)""", "onClick={() => $1()}");
 
         // Transform @onchange → onChange
+        result = Regex.Replace(result, @"@onchange=""@Props\.(\w+)""", "onChange={props.$1}");
         result = Regex.Replace(result, @"@onchange=""@(\w+)""", "onChange={$1}");
 
-        // Transform simple expressions @Props.X → {props.X}
-        result = Regex.Replace(result, @"@Props\.(\w+)", "{props.$1}");
+        // Transform disabled="@Props.X" → disabled={props.X}
+        result = Regex.Replace(result, @"disabled=""@Props\.(\w+)""", "disabled={props.$1}");
 
-        // Transform attribute expressions prop="@value" → prop={value}
-        result = Regex.Replace(result, @"=""@(\w+)""", "={$1}");
+        // Transform attribute props: Attr="@Props.X" → Attr={props.X}
+        result = Regex.Replace(result, @"(\w+)=""@Props\.(\w+)""", "$1={props.$2}");
 
-        // Transform @if blocks
+        // Transform @if blocks BEFORE other transformations
         result = TransformIfBlocks(result);
 
         // Transform @foreach blocks
         result = TransformForeachBlocks(result);
+
+        // Transform remaining @Props.X → {props.X}
+        result = Regex.Replace(result, @"@Props\.(\w+)", "{props.$1}");
+
+        // Clean up any remaining C# string methods
+        result = Regex.Replace(result, @"!string\.IsNullOrEmpty\(props\.(\w+)\)", "props.$1");
+        result = Regex.Replace(result, @"string\.IsNullOrEmpty\(props\.(\w+)\)", "!props.$1");
+
+        // Remove @else blocks (simplified - just remove them for now)
+        result = Regex.Replace(result, @"\s*else\s*\{[^}]*\}", "", RegexOptions.Singleline);
 
         // Indent properly
         var lines = result.Trim().Split('\n');
@@ -157,42 +170,107 @@ public class TsxEmitter
     {
         var result = source;
 
-        // Transform @if (condition) { content } → {condition && ( content )}
-        result = Regex.Replace(result,
-            @"@if\s*\(([^)]+)\)\s*\{([^}]+)\}",
-            m =>
-            {
-                var condition = TransformCondition(m.Groups[1].Value);
-                var content = m.Groups[2].Value.Trim();
-                return $"{{({condition}) && (\n{content}\n)}}";
-            },
-            RegexOptions.Singleline);
+        // Handle @if with balanced parentheses for condition
+        while (true)
+        {
+            var ifIndex = result.IndexOf("@if");
+            if (ifIndex == -1) break;
+
+            // Find the opening paren
+            var parenStart = result.IndexOf('(', ifIndex);
+            if (parenStart == -1) break;
+
+            // Extract balanced condition
+            var condition = ExtractBalancedParens(result, parenStart);
+            var afterCondition = parenStart + condition.Length + 2; // +2 for parens
+
+            // Find opening brace
+            var braceStart = result.IndexOf('{', afterCondition);
+            if (braceStart == -1) break;
+
+            // Extract balanced content
+            var content = ExtractBalancedBraces(result, braceStart);
+            var endIndex = braceStart + content.Length + 2; // +2 for braces
+
+            // Transform condition
+            var transformedCondition = TransformCondition(condition);
+            var replacement = $"{{({transformedCondition}) && (\n{content.Trim()}\n)}}";
+
+            result = result.Substring(0, ifIndex) + replacement + result.Substring(endIndex);
+        }
 
         return result;
+    }
+
+    private string ExtractBalancedParens(string source, int openParenIndex)
+    {
+        var depth = 1;
+        var i = openParenIndex + 1;
+        while (i < source.Length && depth > 0)
+        {
+            if (source[i] == '(') depth++;
+            else if (source[i] == ')') depth--;
+            i++;
+        }
+        return source.Substring(openParenIndex + 1, i - openParenIndex - 2);
     }
 
     private string TransformForeachBlocks(string source)
     {
         var result = source;
 
-        // Transform @foreach (var x in collection) { content } → {collection.map(x => ( content ))}
-        result = Regex.Replace(result,
-            @"@foreach\s*\(\s*var\s+(\w+)\s+in\s+([^)]+)\)\s*\{([^}]+)\}",
-            m =>
-            {
-                var itemVar = m.Groups[1].Value;
-                var collection = TransformExpression(m.Groups[2].Value.Trim());
-                var content = m.Groups[3].Value.Trim();
-                return $"{{{collection}.map(({itemVar}) => (\n{content}\n))}}";
-            },
-            RegexOptions.Singleline);
+        // Handle @foreach with nested braces
+        while (Regex.IsMatch(result, @"@foreach\s*\(\s*var\s+\w+\s+in\s+[^)]+\)\s*\{"))
+        {
+            var match = Regex.Match(result, @"@foreach\s*\(\s*var\s+(\w+)\s+in\s+([^)]+)\)\s*\{");
+            if (!match.Success) break;
+
+            var itemVar = match.Groups[1].Value;
+            var collection = TransformExpression(match.Groups[2].Value.Trim());
+            var startIndex = match.Index + match.Length;
+            var content = ExtractBalancedBraces(result, startIndex - 1);
+            var endIndex = startIndex + content.Length + 1;
+
+            // Transform loop variable references inside content
+            var transformedContent = content.Trim();
+
+            // Handle attribute bindings: Attr="@var.Prop" → Attr={var.Prop}
+            transformedContent = Regex.Replace(transformedContent, $@"(\w+)=""@{itemVar}\.(\w+)""", $"$1={{{itemVar}.$2}}");
+            // Handle attribute bindings: Attr="@var" → Attr={var}
+            transformedContent = Regex.Replace(transformedContent, $@"(\w+)=""@{itemVar}""", $"$1={{{itemVar}}}");
+
+            // Handle text content: @var.Prop → {var.Prop}
+            transformedContent = Regex.Replace(transformedContent, $@"@{itemVar}\.(\w+)", $"{{{itemVar}.$1}}");
+            // Handle text content: @var → {var}
+            transformedContent = Regex.Replace(transformedContent, $@"@{itemVar}(?![\w\.])", $"{{{itemVar}}}");
+
+            var replacement = $"{{{collection}.map(({itemVar}, index) => (\n{transformedContent}\n))}}";
+            result = result.Substring(0, match.Index) + replacement + result.Substring(endIndex);
+        }
 
         return result;
     }
 
+    private string ExtractBalancedBraces(string source, int openBraceIndex)
+    {
+        var depth = 1;
+        var i = openBraceIndex + 1;
+        while (i < source.Length && depth > 0)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}') depth--;
+            i++;
+        }
+        return source.Substring(openBraceIndex + 1, i - openBraceIndex - 2);
+    }
+
     private string TransformCondition(string condition)
     {
-        return TransformExpression(condition);
+        var result = TransformExpression(condition);
+        // Transform C# string methods to JS
+        result = Regex.Replace(result, @"!string\.IsNullOrEmpty\(props\.(\w+)\)", "props.$1");
+        result = Regex.Replace(result, @"string\.IsNullOrEmpty\(props\.(\w+)\)", "!props.$1");
+        return result;
     }
 
     private string TransformExpression(string expr)
@@ -205,6 +283,12 @@ public class TsxEmitter
 
     private bool IsHtmlElement(string tagName)
     {
+        // If first letter is uppercase, it's a React component (e.g., Button vs button)
+        if (char.IsUpper(tagName[0]))
+        {
+            return false;
+        }
+
         var htmlElements = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "div", "span", "p", "a", "button", "input", "form", "label",

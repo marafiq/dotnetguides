@@ -1,0 +1,8 @@
+@inherits SliceComponent<StatsRowProps>
+
+<div class="stats-row">
+    @foreach (var stat in Props.Stats)
+    {
+        <StatItem Value="@stat.Value" Label="@stat.Label" />
+    }
+</div>

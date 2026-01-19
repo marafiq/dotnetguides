@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/Shalimar.Razor/Shalimar.Razor.csproj" />
+  </ItemGroup>
+  <!-- Exclude razor-components from Blazor compilation - processed by Shalimar -->
+  <ItemGroup>
+    <Compile Remove="razor-components/**" />
+    <Content Remove="razor-components/**" />
+    <None Include="razor-components/**" />
+  </ItemGroup>
+</Project>
