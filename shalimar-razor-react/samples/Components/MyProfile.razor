@@ -1,0 +1,55 @@
+@inherits SliceComponent<MyProfileProps>
+
+<div class="profile-card">
+    <div class="profile-header">
+        <img class="avatar" src="@Props.AvatarUrl" alt="Profile" />
+        <h1>@Props.FullName</h1>
+        <p class="title">@Props.JobTitle</p>
+    </div>
+
+    <div class="profile-stats">
+        <div class="stat">
+            <span class="stat-value">@Props.ProjectCount</span>
+            <span class="stat-label">Projects</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">@Props.FollowerCount</span>
+            <span class="stat-label">Followers</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">@Props.Rating</span>
+            <span class="stat-label">Rating</span>
+        </div>
+    </div>
+
+    @if (Props.IsVerified)
+    {
+        <div class="verified-badge">
+            <span>Verified Account</span>
+        </div>
+    }
+
+    <div class="profile-bio">
+        <h2>About</h2>
+        <p>@Props.Bio</p>
+    </div>
+
+    <div class="profile-skills">
+        <h2>Skills</h2>
+        <ul>
+            @foreach (var skill in Props.Skills)
+            {
+                <li class="skill-tag">@skill</li>
+            }
+        </ul>
+    </div>
+
+    <div class="profile-actions">
+        <button class="btn btn-primary" @onclick="@OnFollow">
+            Follow
+        </button>
+        <button class="btn btn-secondary" @onclick="@OnMessage">
+            Message
+        </button>
+    </div>
+</div>
