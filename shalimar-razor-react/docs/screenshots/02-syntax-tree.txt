@@ -1,0 +1,79 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    SHALIMAR RAZOR COMPILER - SYNTAX TREE                       ║
+║              Microsoft.AspNetCore.Razor.Language.RazorSyntaxTree              ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+PARSED BY: Microsoft.AspNetCore.Razor.Language v9.0.0
+────────────────────────────────────────────────────────────────────────────────
+
+RazorDocumentSyntax [0..892]
+  RazorDirectiveSyntax [0..44]
+    RazorDirectiveBody
+      CSharpStatementLiteral
+        Content: "@inherits SliceComponent<ResidentCardProps>"
+  MarkupBlockSyntax [45..892]
+    MarkupElementSyntax [46..891]   ← <div class="card resident-card">
+      MarkupStartTagSyntax
+        MarkupTextLiteral
+          Content: "div"
+        MarkupAttributeBlockSyntax
+          MarkupTextLiteral: "class"
+          MarkupLiteralAttributeValue: "card resident-card"
+      MarkupBlockSyntax [83..876]
+        MarkupElementSyntax [88..196]   ← <header>
+          MarkupStartTagSyntax: "header"
+          MarkupAttributeBlockSyntax: class="card-header"
+          MarkupBlockSyntax
+            MarkupElementSyntax   ← <h1>
+              CSharpExpressionLiteral: "Props.Name"
+            MarkupElementSyntax   ← <span>
+              MarkupTextLiteral: "Room "
+              CSharpExpressionLiteral: "Props.RoomNumber"
+        CSharpCodeBlockSyntax [202..324]   ← @if (Props.IsHighRisk)
+          CSharpStatementLiteral: "if (Props.IsHighRisk)"
+          MarkupBlockSyntax
+            MarkupElementSyntax   ← <div class="alert">
+              MarkupElementSyntax   ← <Icon name="warning" />
+              MarkupTextLiteral: "High Fall Risk"
+        MarkupElementSyntax [330..570]   ← <section class="medications">
+          MarkupElementSyntax   ← <h2>
+          MarkupElementSyntax   ← <ul>
+            CSharpCodeBlockSyntax   ← @foreach (var med in Props.Medications)
+              CSharpStatementLiteral: "foreach (var med in Props.Medications)"
+              MarkupBlockSyntax
+                MarkupElementSyntax   ← <MedRow ... />
+        MarkupElementSyntax [576..876]   ← <footer class="card-actions">
+          MarkupElementSyntax   ← <button @onclick="@OnViewDetails">
+            MarkupAttributeBlockSyntax: class="btn btn-primary"
+            MarkupAttributeBlockSyntax: @onclick="@OnViewDetails"
+            MarkupTextLiteral: "View Details"
+          MarkupElementSyntax   ← <button @onclick="@OnPrint">
+      MarkupEndTagSyntax: "</div>"
+
+────────────────────────────────────────────────────────────────────────────────
+KEY SYNTAX NODES FOR TRANSFORMATION:
+────────────────────────────────────────────────────────────────────────────────
+
+1. RazorDirectiveSyntax
+   └─ Extracts: @inherits SliceComponent<ResidentCardProps>
+   └─ Result: Component props type = "ResidentCardProps"
+
+2. MarkupElementSyntax
+   └─ Transforms: <div class="x"> → <div className="x">
+   └─ Handles: HTML elements with JSX attribute conversion
+
+3. MarkupAttributeBlockSyntax
+   └─ Transforms: class → className, for → htmlFor
+   └─ Transforms: @onclick → onClick (event handlers)
+
+4. CSharpExpressionLiteral
+   └─ Transforms: @Props.Name → {props.Name}
+   └─ Transforms: @expression → {expression}
+
+5. CSharpCodeBlockSyntax
+   └─ Transforms: @if (cond) { } → {cond && ( )}
+   └─ Transforms: @foreach (var x in xs) → {xs.map(x => ( ))}
+
+────────────────────────────────────────────────────────────────────────────────
+                           ↓ Emit TSX with TsxEmitter ↓
+────────────────────────────────────────────────────────────────────────────────

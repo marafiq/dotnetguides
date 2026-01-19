@@ -1,0 +1,38 @@
+@inherits SliceComponent<ResidentCardProps>
+
+<div class="card resident-card">
+    <header class="card-header">
+        <h1>@Props.Name</h1>
+        <span class="room-number">Room @Props.RoomNumber</span>
+    </header>
+
+    @if (Props.IsHighRisk)
+    {
+        <div class="alert alert-warning">
+            <Icon name="warning" />
+            High Fall Risk
+        </div>
+    }
+
+    <section class="medications">
+        <h2>Current Medications</h2>
+        <ul>
+            @foreach (var med in Props.Medications)
+            {
+                <MedRow
+                    medication="@med"
+                    onAdminister="@HandleAdminister"
+                    onRefuse="@HandleRefuse" />
+            }
+        </ul>
+    </section>
+
+    <footer class="card-actions">
+        <button class="btn btn-primary" @onclick="@OnViewDetails">
+            View Details
+        </button>
+        <button class="btn btn-secondary" @onclick="@OnPrint">
+            Print MAR
+        </button>
+    </footer>
+</div>
