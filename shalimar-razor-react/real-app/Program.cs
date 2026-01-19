@@ -3,45 +3,43 @@ using Shalimar.Razor;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-// Compile all Razor files to TSX on startup
+// Compile all Razor files to TSX using Microsoft Razor parser
 var razorDir = Path.Combine(Directory.GetCurrentDirectory(), "razor-components");
 var compiler = new RazorReactCompiler();
 var generatedComponents = new Dictionary<string, string>();
 
-Console.WriteLine("Compiling Razor components to TSX...");
+Console.WriteLine("Compiling Razor → TSX (via Microsoft Razor Parser)...");
 foreach (var file in Directory.GetFiles(razorDir, "*.razor"))
 {
     var source = File.ReadAllText(file);
     var result = compiler.Compile(source, Path.GetFileName(file));
     var name = Path.GetFileNameWithoutExtension(file);
     generatedComponents[name] = result.TsxOutput ?? "";
-    Console.WriteLine($"  ✓ {name}.razor → {name}.tsx");
+
+    var directive = source.Contains("@client") ? "@client" : "@server";
+    Console.WriteLine($"  ✓ {name}.razor → {name}.tsx [{directive}]");
 }
-Console.WriteLine($"Compiled {generatedComponents.Count} components.\n");
+Console.WriteLine($"\nCompiled {generatedComponents.Count} components.\n");
 
 // Serve static files and the app
 app.UseStaticFiles();
-app.MapGet("/", () => Results.Content(GenerateHtml(generatedComponents), "text/html"));
+app.MapGet("/", () => Results.Content(GenerateReactApp(generatedComponents), "text/html"));
 
 app.Run("http://0.0.0.0:3003");
 
-static string GenerateHtml(Dictionary<string, string> components)
+static string GenerateReactApp(Dictionary<string, string> components)
 {
+    // Transform TSX for browser use (strip TypeScript, fix imports)
     var componentCode = string.Join("\n\n", components.Select(c =>
     {
         var code = c.Value;
-        // Remove import statements
         code = System.Text.RegularExpressions.Regex.Replace(code, @"import React from 'react';\s*", "");
         code = System.Text.RegularExpressions.Regex.Replace(code, @"import \{[^}]+\} from '[^']+';\s*", "");
-        // Remove entire interface declarations (export interface Name { ... })
         code = System.Text.RegularExpressions.Regex.Replace(code, @"export interface \w+Props \{[^}]+\}\s*", "");
-        // Change export function to just function and strip TypeScript types
         code = code.Replace("export function", "function");
-        // Remove TypeScript type annotations from function parameters
         code = System.Text.RegularExpressions.Regex.Replace(code, @"\(props: \w+Props\)", "(props)");
-        // React uses props.children (lowercase) for JSX children
         code = code.Replace("props.Children", "props.children");
-        return $"// ═══ Generated from {c.Key}.razor ═══\n" + code;
+        return $"// ═══ {c.Key}.razor → TSX ═══\n{code}";
     }));
 
     return $$"""
@@ -49,7 +47,7 @@ static string GenerateHtml(Dictionary<string, string> components)
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Shalimar Real App</title>
+    <title>Shalimar: Razor → React</title>
     <script src="/react.min.js"></script>
     <script src="/react-dom.min.js"></script>
     <script src="/babel.min.js"></script>
@@ -82,42 +80,61 @@ static string GenerateHtml(Dictionary<string, string> components)
         .skills-container{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
         .skill-tag{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:6px 14px;border-radius:20px;font-size:13px}
         .profile-actions{display:flex;gap:12px}
-        .btn{padding:12px 24px;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+        .btn{padding:12px 24px;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:transform 0.1s}
+        .btn:hover{transform:scale(1.02)}
         .btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
         .btn-secondary{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2)}
-        .info-box{background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);border-radius:12px;padding:20px;margin-top:30px;text-align:center}
-        .info-box code{background:rgba(0,0,0,0.3);padding:2px 8px;border-radius:4px}
+        .shalimar-badge{position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:600;box-shadow:0 4px 15px rgba(102,126,234,0.4)}
     </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
+// ═══════════════════════════════════════════════════════════════
+// All components below compiled from .razor files by Shalimar
+// using Microsoft.AspNetCore.Razor.Language parser
+// ═══════════════════════════════════════════════════════════════
+
 {{componentCode}}
 
-// Sample data
+// ═══════════════════════════════════════════════════════════════
+// App Data & Render
+// ═══════════════════════════════════════════════════════════════
 const appData = {
-    Title: "Shalimar Real App",
-    Description: "All components compiled from .razor files by dotnet run",
+    Title: "Shalimar: Razor → React",
+    Description: "Write .razor files, get React components - powered by Microsoft Razor Parser",
     Users: [
         {
-            Name: "Alex Johnson", JobTitle: "Senior Engineer", Initials: "AJ", IsVerified: true,
+            Name: "Alex Johnson",
+            JobTitle: "Senior Engineer",
+            Initials: "AJ",
+            IsVerified: true,
             Bio: "Full-stack developer with 10+ years experience in React, .NET, and cloud architecture.",
             Stats: [{Value:"47",Label:"Projects"},{Value:"2.3k",Label:"Followers"},{Value:"4.9",Label:"Rating"}],
             Skills: ["React","TypeScript","C#",".NET","Azure"],
-            OnFollow: () => alert("Following!"), OnMessage: () => alert("Message!")
+            OnFollow: () => alert("Following Alex!"),
+            OnMessage: () => alert("Message sent to Alex!")
         },
         {
-            Name: "Sarah Chen", JobTitle: "Product Designer", Initials: "SC", IsVerified: false,
+            Name: "Sarah Chen",
+            JobTitle: "Product Designer",
+            Initials: "SC",
+            IsVerified: false,
             Bio: "Design systems enthusiast creating beautiful, accessible interfaces.",
             Stats: [{Value:"32",Label:"Projects"},{Value:"1.8k",Label:"Followers"},{Value:"4.7",Label:"Rating"}],
             Skills: ["Figma","UI/UX","Design Systems"],
-            OnFollow: () => alert("Following!"), OnMessage: () => alert("Message!")
+            OnFollow: () => alert("Following Sarah!"),
+            OnMessage: () => alert("Message sent to Sarah!")
         }
     ]
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App {...appData} />);
 </script>
+
+<div class="shalimar-badge">
+    Razor → React
+</div>
 </body>
 </html>
 """;
