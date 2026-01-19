@@ -1,0 +1,66 @@
+@* Client Component - Form with client-side validation *@
+@client
+@using Shadcn.UI { Button, Input, Textarea }
+@using Lucide { Send, Loader2 }
+
+<form @onsubmit="HandleSubmit" className="space-y-4">
+    <Textarea
+        placeholder="Write a comment..."
+        @bind="State.Comment"
+        className="min-h-24"
+        disabled="@State.IsSubmitting"
+    />
+
+    @if (State.Error != null)
+    {
+        <p className="text-sm text-destructive">@State.Error</p>
+    }
+
+    <Button
+        type="submit"
+        disabled="@(State.IsSubmitting || string.IsNullOrEmpty(State.Comment))"
+        className="gap-2"
+    >
+        @if (State.IsSubmitting)
+        {
+            <Loader2 className="animate-spin" size="16" />
+            <span>Sending...</span>
+        }
+        else
+        {
+            <Send size="16" />
+            <span>Send</span>
+        }
+    </Button>
+</form>
+
+@code {
+    [Prop] string PostId { get; set; }
+
+    [State] string Comment { get; set; } = "";
+    [State] bool IsSubmitting { get; set; } = false;
+    [State] string? Error { get; set; } = null;
+
+    async Task HandleSubmit()
+    {
+        if (string.IsNullOrWhiteSpace(Comment)) return;
+
+        IsSubmitting = true;
+        Error = null;
+
+        try
+        {
+            // Server Action - runs on .NET server
+            await ServerActions.AddComment(PostId, Comment);
+            Comment = "";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+}

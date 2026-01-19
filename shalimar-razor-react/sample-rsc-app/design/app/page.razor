@@ -1,0 +1,66 @@
+@page "/"
+@server
+@using Shadcn.UI { Card, CardHeader, CardTitle, CardContent, CardFooter }
+@using Shadcn.UI { Button, Skeleton, Avatar, AvatarImage, AvatarFallback }
+@using Components.Server { UserProfile, RecentActivity }
+@using Components.Client { LikeButton, CommentForm }
+
+<div className="container mx-auto p-6">
+    <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        @* Server Component - Rendered by .NET, zero JS *@
+        <Card>
+            <CardHeader>
+                <CardTitle>User Profile</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Suspense fallback="<Skeleton className='h-32' />">
+                    <UserProfile user="@await GetCurrentUser()" />
+                </Suspense>
+            </CardContent>
+        </Card>
+
+        @* Server Component with Streaming *@
+        <Card>
+            <CardHeader>
+                <CardTitle>Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Suspense fallback="<ActivitySkeleton />">
+                    @streaming
+                    <RecentActivity items="@await StreamActivity()" />
+                </Suspense>
+            </CardContent>
+        </Card>
+
+        @* Client Component - Hydrated by React *@
+        <Card>
+            <CardHeader>
+                <CardTitle>Interactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+                @client
+                <LikeButton postId="@Props.PostId" initialCount="42" />
+            </CardContent>
+            <CardFooter>
+                @client
+                <CommentForm postId="@Props.PostId" />
+            </CardFooter>
+        </Card>
+    </div>
+</div>
+
+@code {
+    [Inject] IUserService UserService { get; set; }
+    [Inject] IActivityService ActivityService { get; set; }
+
+    async Task<User> GetCurrentUser()
+        => await UserService.GetCurrentAsync();
+
+    async IAsyncEnumerable<Activity> StreamActivity()
+    {
+        await foreach (var item in ActivityService.StreamRecentAsync())
+            yield return item;
+    }
+}
