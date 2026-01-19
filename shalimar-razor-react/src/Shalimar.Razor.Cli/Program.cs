@@ -227,9 +227,9 @@ TRANSFORMATION:
         {
             var source = File.ReadAllText(inputPath);
             var compiler = new RazorReactCompiler();
-            var tree = compiler.DumpSyntaxTree(source, Path.GetFileName(inputPath));
+            var tree = compiler.DumpInfo(source, Path.GetFileName(inputPath));
 
-            Console.WriteLine($"Syntax tree for: {inputPath}");
+            Console.WriteLine($"Info for: {inputPath}");
             Console.WriteLine(new string('═', 60));
             Console.WriteLine(tree);
 
@@ -306,14 +306,14 @@ TRANSFORMATION:
 
         var compiler = new RazorReactCompiler();
 
-        // Show syntax tree
+        // Show parse info
         Console.ForegroundColor = ConsoleColor.Magenta;
-        Console.WriteLine("SYNTAX TREE (partial):");
+        Console.WriteLine("PARSE INFO:");
         Console.ResetColor();
         Console.WriteLine(new string('─', 60));
-        var tree = compiler.DumpSyntaxTree(demoRazor, "ResidentCard.razor");
-        var treeLines = tree.Split('\n').Take(25);
-        foreach (var line in treeLines)
+        var info = compiler.DumpInfo(demoRazor, "ResidentCard.razor");
+        var infoLines = info.Split('\n').Take(25);
+        foreach (var line in infoLines)
         {
             Console.WriteLine(line);
         }

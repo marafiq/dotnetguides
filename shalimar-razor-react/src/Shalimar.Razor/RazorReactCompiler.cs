@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Razor.Language;
-using Microsoft.AspNetCore.Razor.Language.Syntax;
 using System.Text;
 
 namespace Shalimar.Razor;
@@ -8,10 +7,10 @@ namespace Shalimar.Razor;
 /// Main entry point for compiling Razor files to React TSX components.
 ///
 /// Architecture:
-/// .razor → RazorProjectEngine → SyntaxTree → TsxEmitter → React Components
+/// .razor → RazorProjectEngine → Validation + IR → TsxEmitter → React Components
 ///
-/// We leverage Microsoft's battle-tested Razor parser (50,000+ lines)
-/// and only write the TSX emitter (~500 lines).
+/// We leverage Microsoft's battle-tested Razor parser for validation,
+/// then transform the source using our emitter.
 /// </summary>
 public class RazorReactCompiler
 {
@@ -28,7 +27,6 @@ public class RazorReactCompiler
             fileSystem,
             builder =>
             {
-                // Configure for component-style Razor (Blazor-like)
                 builder.SetRootNamespace("Shalimar.Components");
             });
     }
@@ -44,7 +42,7 @@ public class RazorReactCompiler
             filePath: $"/{fileName}",
             content: razorSource);
 
-        // Parse the Razor source
+        // Parse the Razor source - this validates the syntax
         var codeDocument = _engine.Process(projectItem);
         var syntaxTree = codeDocument.GetSyntaxTree();
 
@@ -59,11 +57,11 @@ public class RazorReactCompiler
                 new CompilationError(d.Span.LineIndex + 1, d.GetMessage())).ToList());
         }
 
-        // Emit TSX
+        // Emit TSX from the validated source
         var emitter = new TsxEmitter(fileName);
-        var tsx = emitter.Emit(syntaxTree);
+        var tsx = emitter.Emit(razorSource);
 
-        return CompilationResult.Success(tsx, syntaxTree);
+        return CompilationResult.Success(tsx, razorSource);
     }
 
     /// <summary>
@@ -80,9 +78,9 @@ public class RazorReactCompiler
     }
 
     /// <summary>
-    /// Dump the syntax tree for debugging/visualization.
+    /// Dump diagnostic info for debugging.
     /// </summary>
-    public string DumpSyntaxTree(string razorSource, string fileName = "Component.razor")
+    public string DumpInfo(string razorSource, string fileName = "Component.razor")
     {
         var projectItem = new VirtualRazorProjectItem(
             basePath: "/",
@@ -92,8 +90,26 @@ public class RazorReactCompiler
         var codeDocument = _engine.Process(projectItem);
         var syntaxTree = codeDocument.GetSyntaxTree();
 
-        var dumper = new SyntaxTreeDumper();
-        return dumper.Dump(syntaxTree.Root);
+        var sb = new StringBuilder();
+        sb.AppendLine($"File: {fileName}");
+        sb.AppendLine($"Source length: {razorSource.Length} chars");
+        sb.AppendLine($"Diagnostics: {syntaxTree.Diagnostics.Count()}");
+
+        foreach (var diag in syntaxTree.Diagnostics)
+        {
+            sb.AppendLine($"  [{diag.Severity}] Line {diag.Span.LineIndex + 1}: {diag.GetMessage()}");
+        }
+
+        // Show the generated C# code (proves the parser works)
+        var csharpDoc = codeDocument.GetCSharpDocument();
+        if (csharpDoc != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Generated C# (first 500 chars):");
+            sb.AppendLine(csharpDoc.GeneratedCode.Substring(0, Math.Min(500, csharpDoc.GeneratedCode.Length)));
+        }
+
+        return sb.ToString();
     }
 }
 
@@ -104,19 +120,19 @@ public class CompilationResult
 {
     public bool IsSuccess { get; }
     public string? TsxOutput { get; }
-    public RazorSyntaxTree? SyntaxTree { get; }
+    public string? SourceCode { get; }
     public IReadOnlyList<CompilationError> Errors { get; }
 
-    private CompilationResult(bool success, string? tsx, RazorSyntaxTree? tree, IReadOnlyList<CompilationError> errors)
+    private CompilationResult(bool success, string? tsx, string? source, IReadOnlyList<CompilationError> errors)
     {
         IsSuccess = success;
         TsxOutput = tsx;
-        SyntaxTree = tree;
+        SourceCode = source;
         Errors = errors;
     }
 
-    public static CompilationResult Success(string tsx, RazorSyntaxTree tree) =>
-        new(true, tsx, tree, Array.Empty<CompilationError>());
+    public static CompilationResult Success(string tsx, string source) =>
+        new(true, tsx, source, Array.Empty<CompilationError>());
 
     public static CompilationResult Failed(IReadOnlyList<CompilationError> errors) =>
         new(false, null, null, errors);
@@ -151,6 +167,12 @@ internal class VirtualRazorProjectFileSystem : RazorProjectFileSystem
         return Enumerable.Empty<RazorProjectItem>();
     }
 
+    [Obsolete]
+    public override RazorProjectItem GetItem(string path)
+    {
+        return new VirtualRazorProjectItem("/", path, string.Empty);
+    }
+
     public override RazorProjectItem GetItem(string path, string? fileKind)
     {
         return new VirtualRazorProjectItem("/", path, string.Empty);
@@ -175,47 +197,9 @@ internal class VirtualRazorProjectItem : RazorProjectItem
     public override string FilePath { get; }
     public override string PhysicalPath => FilePath;
     public override bool Exists => true;
-    public override string FileKind => "component";
 
     public override Stream Read()
     {
         return new MemoryStream(Encoding.UTF8.GetBytes(_content));
-    }
-}
-
-/// <summary>
-/// Utility for dumping syntax trees for debugging.
-/// </summary>
-internal class SyntaxTreeDumper
-{
-    private readonly StringBuilder _sb = new();
-    private int _indent = 0;
-
-    public string Dump(SyntaxNode root)
-    {
-        Visit(root);
-        return _sb.ToString();
-    }
-
-    private void Visit(SyntaxNode node)
-    {
-        _sb.AppendLine($"{new string(' ', _indent * 2)}{node.GetType().Name} [{node.SpanStart}..{node.EndPosition}]");
-
-        // Show content for leaf nodes
-        if (node is SyntaxToken token && !string.IsNullOrWhiteSpace(token.Content))
-        {
-            var content = token.Content.Length > 50
-                ? token.Content.Substring(0, 47) + "..."
-                : token.Content;
-            content = content.Replace("\n", "\\n").Replace("\r", "\\r");
-            _sb.AppendLine($"{new string(' ', (_indent + 1) * 2)}Content: \"{content}\"");
-        }
-
-        _indent++;
-        foreach (var child in node.ChildNodes())
-        {
-            Visit(child);
-        }
-        _indent--;
     }
 }
