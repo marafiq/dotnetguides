@@ -1,0 +1,11 @@
+{
+  "name": "shalimar-playwright-tests",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node screenshot.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}

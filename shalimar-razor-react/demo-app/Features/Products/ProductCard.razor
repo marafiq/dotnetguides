@@ -1,0 +1,30 @@
+@client
+
+<div className="product-card" style="border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+  <img src="@Props.ImageUrl" alt="@Props.Name" style="width: 100%; height: 200px; object-fit: cover; border-radius: 8px;" />
+
+  <h3 style="margin: 16px 0 8px 0; font-size: 18px; color: #333;">@Props.Name</h3>
+
+  <p style="color: #666; font-size: 14px; margin-bottom: 12px;">@Props.Description</p>
+
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <span style="font-size: 24px; font-weight: bold; color: #0066cc;">$@Props.Price</span>
+
+    @if (Props.InStock)
+    {
+      <span style="background: #e8f5e9; color: #2e7d32; padding: 4px 12px; border-radius: 20px; font-size: 12px;">In Stock</span>
+    }
+  </div>
+
+  <button style="width: 100%; margin-top: 16px; padding: 12px; background: #0066cc; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer;">
+    Add to Cart
+  </button>
+</div>
+
+@code {
+    [Parameter] public string Name { get; set; }
+    [Parameter] public string Description { get; set; }
+    [Parameter] public string ImageUrl { get; set; }
+    [Parameter] public decimal Price { get; set; }
+    [Parameter] public bool InStock { get; set; } = true;
+}

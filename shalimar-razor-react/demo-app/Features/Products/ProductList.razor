@@ -1,0 +1,27 @@
+@server
+
+<div className="product-list">
+  <h2 style="margin-bottom: 24px; font-size: 28px; color: #333;">@Props.Title</h2>
+
+  @if (Props.Products?.Length == 0)
+  {
+    <p style="color: #666; text-align: center; padding: 40px;">No products available.</p>
+  }
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px;">
+    @foreach (var product in Products)
+    {
+      <ProductCard
+        Name="@product.Name"
+        Description="@product.Description"
+        ImageUrl="@product.ImageUrl"
+        Price="@product.Price"
+        InStock="@product.InStock" />
+    }
+  </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Our Products";
+    [Parameter] public Product[] Products { get; set; }
+}

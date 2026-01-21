@@ -1,11 +1,9 @@
-using Microsoft.AspNetCore.Razor.Language;
-using Microsoft.AspNetCore.Razor.Language.Syntax;
 using System.Text.RegularExpressions;
 
 namespace Shalimar.Razor;
 
 /// <summary>
-/// Parses .razor files using Microsoft.AspNetCore.Razor.Language
+/// Parses .razor files using regex-based parsing
 /// </summary>
 public class RazorParser
 {

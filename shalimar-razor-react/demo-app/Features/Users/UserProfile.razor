@@ -1,0 +1,25 @@
+@server
+
+<div className="user-profile" style="display: flex; align-items: center; gap: 16px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+  <img
+    src="@Props.AvatarUrl"
+    alt="@Props.Name"
+    style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" />
+
+  <div>
+    <h3 style="margin: 0 0 4px 0; font-size: 20px; color: #333;">@Props.Name</h3>
+    <p style="margin: 0 0 8px 0; color: #666;">@Props.Email</p>
+
+    @if (Props.IsVerified)
+    {
+      <span style="background: #e3f2fd; color: #1565c0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">Verified</span>
+    }
+  </div>
+</div>
+
+@code {
+    [Parameter] public string Name { get; set; }
+    [Parameter] public string Email { get; set; }
+    [Parameter] public string AvatarUrl { get; set; }
+    [Parameter] public bool IsVerified { get; set; }
+}
