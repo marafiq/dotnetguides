@@ -1,9 +1,0 @@
-@inherits SliceComponent<ButtonProps>
-
-<button class="btn @Props.Variant" @onclick="@Props.OnClick" disabled="@Props.Disabled">
-    @if (Props.Icon != null)
-    {
-        <Icon name="@Props.Icon" />
-    }
-    <span>@Props.Label</span>
-</button>
