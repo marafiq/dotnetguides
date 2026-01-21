@@ -1,0 +1,30 @@
+@client
+
+<div className="stat-card" style="padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+  <h3 className="stat-title" style="font-size: 14px; color: #666; margin-bottom: 8px;">
+    @Props.Title
+  </h3>
+  <div className="stat-value" style="font-size: 28px; font-weight: bold; color: #333;">
+    @Props.Value
+  </div>
+  @if (Props.Change)
+  {
+    <div className="stat-change" style="margin-top: 8px; font-size: 14px;">
+      @if (Props.IsPositive)
+      {
+        <span style="color: #00aa00;">+@Props.Change</span>
+      }
+      else
+      {
+        <span style="color: #cc0000;">@Props.Change</span>
+      }
+    </div>
+  }
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; }
+    [Parameter] public string Value { get; set; }
+    [Parameter] public string? Change { get; set; }
+    [Parameter] public bool IsPositive { get; set; }
+}

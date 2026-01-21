@@ -1,0 +1,26 @@
+@server
+
+<div className="user-list">
+  <h2>@Props.Title</h2>
+
+  @if (Props.Users?.Count == 0)
+  {
+    <p className="empty-state">No users found.</p>
+  }
+
+  <div className="users-grid">
+    @foreach (var user in Users)
+    {
+      <UserProfile
+        Name="@user.Name"
+        Email="@user.Email"
+        AvatarUrl="@user.AvatarUrl"
+        IsActive="@user.IsActive" />
+    }
+  </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Users";
+    [Parameter] public List<User> Users { get; set; }
+}

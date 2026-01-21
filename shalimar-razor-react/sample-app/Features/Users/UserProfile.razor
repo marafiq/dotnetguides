@@ -1,0 +1,40 @@
+@server
+
+<div className="user-profile">
+  <div className="user-header">
+    <Avatar src="@Props.AvatarUrl" alt="@Props.Name" />
+    <div className="user-info">
+      <h2>@Props.Name</h2>
+      <p className="email">@Props.Email</p>
+    </div>
+  </div>
+
+  @if (Props.IsActive)
+  {
+    <span className="badge badge-active">Active</span>
+  }
+
+  @if (Props.Bio)
+  {
+    <p className="bio">@Props.Bio</p>
+  }
+
+  <div className="user-stats">
+    @foreach (var stat in Stats)
+    {
+      <div className="stat-item">
+        <span className="stat-value">@stat.Value</span>
+        <span className="stat-label">@stat.Label</span>
+      </div>
+    }
+  </div>
+</div>
+
+@code {
+    [Parameter] public string Name { get; set; }
+    [Parameter] public string Email { get; set; }
+    [Parameter] public string? AvatarUrl { get; set; }
+    [Parameter] public string? Bio { get; set; }
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public List<UserStat> Stats { get; set; }
+}

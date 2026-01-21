@@ -1,0 +1,30 @@
+@client
+
+<div className="dashboard">
+  <header className="dashboard-header">
+    <h1>@Props.Title</h1>
+    <p className="subtitle">@Props.Subtitle</p>
+  </header>
+
+  <div className="stats-row">
+    @foreach (var stat in Stats)
+    {
+      <StatCard
+        Title="@stat.Title"
+        Value="@stat.Value"
+        Change="@stat.Change"
+        IsPositive="@stat.IsPositive" />
+    }
+  </div>
+
+  <div className="dashboard-content">
+    @Props.Children
+  </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Dashboard";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public List<DashboardStat> Stats { get; set; }
+    [Parameter] public RenderFragment? Children { get; set; }
+}

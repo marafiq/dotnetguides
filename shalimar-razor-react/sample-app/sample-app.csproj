@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\Shalimar.Razor\Shalimar.Razor.csproj" />
+  </ItemGroup>
+
+  <!-- Auto-compile Razor files on build -->
+  <Target Name="CompileRazorToTsx" BeforeTargets="Build">
+    <Exec Command="dotnet run --project ../src/Shalimar.Razor.Cli/Shalimar.Razor.Cli.csproj -- build -s ./Features -m ./shalimar-manifest.json" ContinueOnError="true" />
+  </Target>
+
+</Project>
