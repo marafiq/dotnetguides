@@ -771,8 +771,30 @@ class Program
 {
     static int Main(string[] args)
     {
-        using var runner = new TestRunner();
-        runner.RunAllTests();
+        if (args.Contains("--expr") || args.Contains("-e"))
+        {
+            // Run expression tests with TS validation
+            using var exprTests = new ExpressionTests();
+            exprTests.RunAllTests();
+        }
+        else if (args.Contains("--all") || args.Contains("-a"))
+        {
+            // Run all tests
+            using var runner = new TestRunner();
+            runner.RunAllTests();
+
+            Console.WriteLine("\n" + new string('=', 50) + "\n");
+
+            using var exprTests = new ExpressionTests();
+            exprTests.RunAllTests();
+        }
+        else
+        {
+            // Default: run basic tests
+            using var runner = new TestRunner();
+            runner.RunAllTests();
+        }
+
         return 0;
     }
 }

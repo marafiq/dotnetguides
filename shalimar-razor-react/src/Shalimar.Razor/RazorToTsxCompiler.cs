@@ -191,8 +191,23 @@ public class RazorToTsxCompiler
 
         // Transform template to JSX
         var jsx = TransformToJsx(template);
-        var indentedJsx = IndentLines(jsx, "    ");
-        sb.AppendLine(indentedJsx);
+
+        // Check if JSX needs fragment wrapper (starts with expression or has multiple roots)
+        var trimmedJsx = jsx.Trim();
+        var needsFragment = trimmedJsx.StartsWith("{") || HasMultipleRootElements(trimmedJsx);
+
+        if (needsFragment)
+        {
+            sb.AppendLine("    <>");
+            var indentedJsx = IndentLines(jsx, "      ");
+            sb.AppendLine(indentedJsx);
+            sb.AppendLine("    </>");
+        }
+        else
+        {
+            var indentedJsx = IndentLines(jsx, "    ");
+            sb.AppendLine(indentedJsx);
+        }
 
         sb.AppendLine("  );");
         sb.AppendLine("}");
@@ -413,6 +428,53 @@ public class RazorToTsxCompiler
             var t when t.EndsWith("?") => $"{ConvertToTypeScript(t[..^1])} | null",
             _ => csharpType
         };
+    }
+
+    /// <summary>
+    /// Check if JSX has multiple root elements (needs fragment wrapper)
+    /// </summary>
+    private bool HasMultipleRootElements(string jsx)
+    {
+        var trimmed = jsx.Trim();
+        if (string.IsNullOrEmpty(trimmed)) return false;
+
+        // Count top-level elements by tracking depth
+        int depth = 0;
+        int rootCount = 0;
+        int i = 0;
+
+        while (i < trimmed.Length)
+        {
+            if (trimmed[i] == '<')
+            {
+                // Check for closing tag
+                if (i + 1 < trimmed.Length && trimmed[i + 1] == '/')
+                {
+                    depth--;
+                    // Skip to end of tag
+                    while (i < trimmed.Length && trimmed[i] != '>') i++;
+                }
+                // Check for self-closing or opening tag
+                else if (i + 1 < trimmed.Length && trimmed[i + 1] != '!')
+                {
+                    if (depth == 0) rootCount++;
+                    depth++;
+                    // Check for self-closing
+                    while (i < trimmed.Length && trimmed[i] != '>')
+                    {
+                        if (trimmed[i] == '/' && i + 1 < trimmed.Length && trimmed[i + 1] == '>')
+                        {
+                            depth--;
+                            break;
+                        }
+                        i++;
+                    }
+                }
+            }
+            i++;
+        }
+
+        return rootCount > 1;
     }
 
     /// <summary>
