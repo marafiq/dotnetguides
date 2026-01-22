@@ -773,7 +773,19 @@ class Program
 {
     static int Main(string[] args)
     {
-        if (args.Contains("--expr") || args.Contains("-e"))
+        if (args.Contains("--dsl") || args.Contains("-d"))
+        {
+            // Run fluent DSL tests
+            var dslTests = new FluentDslTests();
+            dslTests.RunAllTests();
+        }
+        else if (args.Contains("--enhanced") || args.Contains("-n"))
+        {
+            // Run enhanced DSL tests
+            var enhancedTests = new EnhancedDslTests();
+            enhancedTests.RunAllTests();
+        }
+        else if (args.Contains("--expr") || args.Contains("-e"))
         {
             // Run expression tests with TS validation
             using var exprTests = new ExpressionTests();
@@ -789,6 +801,16 @@ class Program
 
             using var exprTests = new ExpressionTests();
             exprTests.RunAllTests();
+
+            Console.WriteLine("\n" + new string('=', 50) + "\n");
+
+            var dslTests = new FluentDslTests();
+            dslTests.RunAllTests();
+
+            Console.WriteLine("\n" + new string('=', 50) + "\n");
+
+            var enhancedTests = new EnhancedDslTests();
+            enhancedTests.RunAllTests();
         }
         else
         {
