@@ -249,6 +249,293 @@ public class ExpressionTests : IDisposable
                 Assert(result.GeneratedCode!.Contains("import React"), "Should import React");
             });
 
+        // EVENT HANDLERS
+        Console.WriteLine("\n### Event Handlers ###");
+
+        RunTest("E16 onclick handler", @"
+<button @onclick=""handleClick"">Click me</button>
+@code {
+    void handleClick() { }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("onClick={handleClick}"), "Should have onClick={handleClick}");
+            });
+
+        RunTest("E17 onclick inline arrow", @"
+<button @onclick=""() => count++"">+1</button>
+@code {
+    [Store] int count = 0;
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("onClick={() =>"), "Should have onClick arrow function");
+            });
+
+        RunTest("E18 onchange handler", @"
+<input @onchange=""handleChange"" />
+@code {
+    void handleChange() { }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("onChange={handleChange}"), "Should have onChange");
+            });
+
+        RunTest("E19 onsubmit handler", @"
+<form @onsubmit=""handleSubmit"">
+    <button type=""submit"">Submit</button>
+</form>
+@code {
+    void handleSubmit() { }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("onSubmit={handleSubmit}"), "Should have onSubmit");
+            });
+
+        RunTest("E20 onkeydown handler", @"
+<input @onkeydown=""handleKeyDown"" />
+@code {
+    void handleKeyDown() { }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("onKeyDown={handleKeyDown}"), "Should have onKeyDown");
+            });
+
+        // ELSE / ELSE IF
+        Console.WriteLine("\n### Conditionals - else/else if ###");
+
+        RunTest("E21 if else", @"
+@if (Props.IsLoggedIn)
+{
+    <span>Welcome!</span>
+}
+else
+{
+    <span>Please login</span>
+}
+@code {
+    [Parameter] public bool IsLoggedIn { get; set; }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("?") && result.GeneratedCode!.Contains(":"),
+                    "Should have ternary operator");
+            });
+
+        RunTest("E22 if else if else", @"
+@if (Props.Status == ""loading"")
+{
+    <span>Loading...</span>
+}
+else if (Props.Status == ""error"")
+{
+    <span>Error!</span>
+}
+else
+{
+    <span>Ready</span>
+}
+@code {
+    [Parameter] public string Status { get; set; }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("Status === \"loading\""), "Should have first condition");
+                Assert(result.GeneratedCode!.Contains("Status === \"error\""), "Should have else if condition");
+            });
+
+        // EXPLICIT EXPRESSIONS
+        Console.WriteLine("\n### Explicit Expressions @(...) ###");
+
+        RunTest("E23 explicit expression add", @"
+<div>Sum: @(Props.A + Props.B)</div>
+@code {
+    [Parameter] public int A { get; set; }
+    [Parameter] public int B { get; set; }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("{A + B}"), "Should have {A + B}");
+            });
+
+        RunTest("E24 explicit ternary", @"
+<div>@(Props.IsActive ? ""Active"" : ""Inactive"")</div>
+@code {
+    [Parameter] public bool IsActive { get; set; }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("{IsActive ?"), "Should have ternary");
+            });
+
+        RunTest("E25 string interpolation", @"
+<div>@($""Hello {Props.Name}!"")</div>
+@code {
+    [Parameter] public string Name { get; set; }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("`Hello ${Name}!`"), "Should convert to template literal");
+            });
+
+        // TANSTACK STORE
+        Console.WriteLine("\n### TanStack Store ###");
+
+        RunTest("E26 Store state var", @"
+@client
+<div>Count: @count</div>
+<button @onclick=""increment"">+1</button>
+@code {
+    [Store] int count = 0;
+
+    void increment() {
+        count++;
+    }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("@tanstack/store") || result.GeneratedCode!.Contains("useState"),
+                    "Should import store or useState");
+                Assert(result.GeneratedCode!.Contains("count"), "Should have count state");
+            });
+
+        RunTest("E27 Multiple store vars", @"
+@client
+<div>@name - @age</div>
+@code {
+    [Store] string name = """";
+    [Store] int age = 0;
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("name"), "Should have name");
+                Assert(result.GeneratedCode!.Contains("age"), "Should have age");
+            });
+
+        // TWO-WAY BINDING
+        Console.WriteLine("\n### Two-Way Binding ###");
+
+        RunTest("E28 bind input text", @"
+@client
+<input @bind=""name"" />
+@code {
+    [Store] string name = """";
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("value={name}"), "Should have value={name}");
+                Assert(result.GeneratedCode!.Contains("onChange"), "Should have onChange");
+            });
+
+        RunTest("E29 bind select", @"
+@client
+<select @bind=""selected"">
+    <option value=""a"">A</option>
+    <option value=""b"">B</option>
+</select>
+@code {
+    [Store] string selected = ""a"";
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("value={selected}"), "Should bind select value");
+            });
+
+        RunTest("E30 bind checkbox", @"
+@client
+<input type=""checkbox"" @bind=""isChecked"" />
+@code {
+    [Store] bool isChecked = false;
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("checked"), "Should use checked for checkbox");
+            });
+
+        // IMPORTS (Skip TS validation - testing import transformation, not module existence)
+        Console.WriteLine("\n### Imports ###");
+
+        RunTest("E31 using component", @"
+@using ""./ProductCard""
+
+<div>
+    <ProductCard />
+</div>",
+            result => {
+                Assert(result.GeneratedCode!.Contains("import") && result.GeneratedCode!.Contains("ProductCard"),
+                    "Should import ProductCard");
+                Assert(result.GeneratedCode!.Contains("from './ProductCard'"), "Should have correct import path");
+            }, validateTs: false);
+
+        RunTest("E32 using with alias", @"
+@using ""./Button"" as PrimaryButton
+
+<div>
+    <PrimaryButton>Click</PrimaryButton>
+</div>",
+            result => {
+                Assert(result.GeneratedCode!.Contains("PrimaryButton"), "Should have alias");
+                Assert(result.GeneratedCode!.Contains("from './Button'"), "Should have correct path");
+            }, validateTs: false);
+
+        RunTest("E33 using named imports", @"
+@using { formatDate, formatCurrency } from ""./utils""
+
+<div>Test</div>",
+            result => {
+                Assert(result.GeneratedCode!.Contains("formatDate"), "Should import formatDate");
+                Assert(result.GeneratedCode!.Contains("formatCurrency"), "Should import formatCurrency");
+                Assert(result.GeneratedCode!.Contains("from './utils'"), "Should have correct path");
+            }, validateTs: false);
+
+        // CHILDREN / SLOTS
+        Console.WriteLine("\n### Children/Slots ###");
+
+        RunTest("E34 children slot", @"
+<div class=""card"">
+    @children
+</div>
+@code {
+    [Parameter] public RenderFragment children { get; set; }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("{children}"), "Should render children");
+                Assert(result.GeneratedCode!.Contains("React.ReactNode") ||
+                       result.GeneratedCode!.Contains("ReactNode"),
+                    "Should type children as ReactNode");
+            });
+
+        // COMBINED PATTERNS
+        Console.WriteLine("\n### Combined Patterns ###");
+
+        RunTest("E35 form with bind and events", @"
+@client
+<form @onsubmit=""handleSubmit"">
+    <input @bind=""email"" type=""email"" />
+    <input @bind=""password"" type=""password"" />
+    <button type=""submit"">Login</button>
+</form>
+@code {
+    [Store] string email = """";
+    [Store] string password = """";
+
+    void handleSubmit() {
+        // submit logic
+    }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains("onSubmit"), "Should have onSubmit");
+                Assert(result.GeneratedCode!.Contains("email"), "Should have email");
+                Assert(result.GeneratedCode!.Contains("password"), "Should have password");
+            });
+
+        RunTest("E36 list with conditional", @"
+<ul>
+@foreach (var item in Items)
+{
+    @if (item.IsVisible)
+    {
+        <li>@item.Name</li>
+    }
+}
+</ul>
+@code {
+    [Parameter] public List<ItemModel> Items { get; set; }
+}",
+            result => {
+                Assert(result.GeneratedCode!.Contains(".map"), "Should use map");
+                Assert(result.GeneratedCode!.Contains("&&") || result.GeneratedCode!.Contains("?"),
+                    "Should have conditional");
+            });
+
         // PRINT SUMMARY
         Console.WriteLine($"\n=== Results: {_passed} passed, {_failed} failed ===\n");
 

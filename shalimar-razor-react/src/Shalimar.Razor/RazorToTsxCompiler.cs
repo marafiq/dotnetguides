@@ -99,6 +99,9 @@ public class RazorToTsxCompiler
             Name = name,
             FilePath = filePath,
             Props = new List<PropInfo>(),
+            StoreVars = new List<StoreVarInfo>(),
+            Methods = new List<MethodInfo>(),
+            Imports = new List<ImportInfo>(),
             Directive = ComponentDirective.Default
         };
 
@@ -114,15 +117,101 @@ public class RazorToTsxCompiler
             };
         }
 
+        // Extract @using imports
+        var usingPattern = @"@using\s+""([^""]+)""(?:\s+as\s+(\w+))?";
+        foreach (Match match in Regex.Matches(content, usingPattern))
+        {
+            info.Imports.Add(new ImportInfo
+            {
+                Path = match.Groups[1].Value,
+                Alias = match.Groups[2].Success ? match.Groups[2].Value : null,
+                IsDefault = true
+            });
+        }
+
+        // Extract @using { named } from "path"
+        var namedUsingPattern = @"@using\s+\{\s*([^}]+)\s*\}\s+from\s+""([^""]+)""";
+        foreach (Match match in Regex.Matches(content, namedUsingPattern))
+        {
+            var names = match.Groups[1].Value.Split(',').Select(n => n.Trim()).ToArray();
+            info.Imports.Add(new ImportInfo
+            {
+                Path = match.Groups[2].Value,
+                NamedImports = names,
+                IsDefault = false
+            });
+        }
+
         // Extract @code block
         var codeBlockMatch = Regex.Match(content, @"@code\s*\{([\s\S]*)\}\s*$", RegexOptions.Multiline);
         if (codeBlockMatch.Success)
         {
             var codeBlock = codeBlockMatch.Groups[1].Value;
             info.Props = ExtractProps(codeBlock);
+            info.StoreVars = ExtractStoreVars(codeBlock);
+            info.Methods = ExtractMethods(codeBlock);
         }
 
         return info;
+    }
+
+    /// <summary>
+    /// Extract [Store] variables from code block
+    /// </summary>
+    private List<StoreVarInfo> ExtractStoreVars(string codeBlock)
+    {
+        var vars = new List<StoreVarInfo>();
+        var storePattern = @"\[Store\]\s+(\w+(?:\?)?)\s+(\w+)\s*=\s*([^;]+);";
+
+        foreach (Match match in Regex.Matches(codeBlock, storePattern))
+        {
+            vars.Add(new StoreVarInfo
+            {
+                CSharpType = match.Groups[1].Value,
+                Name = match.Groups[2].Value,
+                DefaultValue = match.Groups[3].Value.Trim(),
+                TypeScriptType = ConvertToTypeScript(match.Groups[1].Value)
+            });
+        }
+
+        return vars;
+    }
+
+    /// <summary>
+    /// Extract methods from code block
+    /// </summary>
+    private List<MethodInfo> ExtractMethods(string codeBlock)
+    {
+        var methods = new List<MethodInfo>();
+        var methodPattern = @"(?:async\s+)?void\s+(\w+)\s*\([^)]*\)\s*\{";
+
+        foreach (Match match in Regex.Matches(codeBlock, methodPattern))
+        {
+            var methodName = match.Groups[1].Value;
+            var startIdx = match.Index + match.Length - 1;
+
+            // Find method body with brace matching
+            int depth = 1;
+            int i = startIdx + 1;
+            while (i < codeBlock.Length && depth > 0)
+            {
+                if (codeBlock[i] == '{') depth++;
+                if (codeBlock[i] == '}') depth--;
+                i++;
+            }
+
+            var body = codeBlock.Substring(startIdx + 1, i - startIdx - 2).Trim();
+            var isAsync = match.Value.StartsWith("async");
+
+            methods.Add(new MethodInfo
+            {
+                Name = methodName,
+                Body = body,
+                IsAsync = isAsync
+            });
+        }
+
+        return methods;
     }
 
     /// <summary>
@@ -162,35 +251,124 @@ public class RazorToTsxCompiler
 
         // Imports
         sb.AppendLine("import React from 'react';");
+
+        // Add TanStack Store imports if using [Store]
+        if (component.StoreVars.Any())
+        {
+            sb.AppendLine("import { useStore } from '@tanstack/react-store';");
+            sb.AppendLine("import { Store } from '@tanstack/store';");
+        }
+
+        // Add explicit @using imports
+        foreach (var import in component.Imports)
+        {
+            if (import.IsDefault)
+            {
+                var name = import.Alias ?? Path.GetFileNameWithoutExtension(import.Path);
+                sb.AppendLine($"import {{ {name} }} from '{import.Path}';");
+            }
+            else if (import.NamedImports != null)
+            {
+                sb.AppendLine($"import {{ {string.Join(", ", import.NamedImports)} }} from '{import.Path}';");
+            }
+        }
+
         foreach (var child in childComponents)
         {
-            sb.AppendLine($"import {{ {child} }} from './{child}';");
+            // Skip if already imported via @using
+            if (!component.Imports.Any(i => i.Path.Contains(child) || i.Alias == child))
+            {
+                sb.AppendLine($"import {{ {child} }} from './{child}';");
+            }
         }
         sb.AppendLine();
 
-        // Props interface
-        if (component.Props.Any())
+        // Generate TanStack Store if using [Store] vars
+        if (component.StoreVars.Any())
+        {
+            sb.AppendLine($"interface {component.Name}State {{");
+            foreach (var v in component.StoreVars)
+            {
+                sb.AppendLine($"  {v.Name}: {v.TypeScriptType};");
+            }
+            sb.AppendLine("}");
+            sb.AppendLine();
+
+            var storeVarName = char.ToLower(component.Name[0]) + component.Name.Substring(1) + "Store";
+            sb.AppendLine($"const {storeVarName} = new Store<{component.Name}State>({{");
+            foreach (var v in component.StoreVars)
+            {
+                var tsValue = ConvertValueToTypeScript(v.DefaultValue, v.CSharpType);
+                sb.AppendLine($"  {v.Name}: {tsValue},");
+            }
+            sb.AppendLine("});");
+            sb.AppendLine();
+        }
+
+        // Props interface (including children if used)
+        var hasChildren = template.Contains("@children");
+        if (component.Props.Any() || hasChildren)
         {
             sb.AppendLine($"export interface {component.Name}Props {{");
             foreach (var prop in component.Props)
             {
+                // Skip children as we handle it separately
+                if (prop.Name.ToLower() == "children") continue;
                 var optional = prop.DefaultValue != null ? "?" : "";
                 sb.AppendLine($"  {prop.Name}{optional}: {prop.TypeScriptType};");
+            }
+            if (hasChildren)
+            {
+                sb.AppendLine("  children?: React.ReactNode;");
             }
             sb.AppendLine("}");
             sb.AppendLine();
         }
 
         // Component function
-        var propsParam = component.Props.Any()
-            ? $"{{ {string.Join(", ", component.Props.Select(p => p.Name))} }}: {component.Name}Props"
+        var propsItems = component.Props.Where(p => p.Name.ToLower() != "children").Select(p => p.Name).ToList();
+        if (hasChildren) propsItems.Add("children");
+
+        var propsParam = (component.Props.Any() || hasChildren)
+            ? $"{{ {string.Join(", ", propsItems)} }}: {component.Name}Props"
             : "";
 
         sb.AppendLine($"export function {component.Name}({propsParam}) {{");
+
+        // Generate useState hooks for store vars
+        if (component.StoreVars.Any())
+        {
+            var storeVarName = char.ToLower(component.Name[0]) + component.Name.Substring(1) + "Store";
+            foreach (var v in component.StoreVars)
+            {
+                sb.AppendLine($"  const {v.Name} = useStore({storeVarName}, (s) => s.{v.Name});");
+            }
+            sb.AppendLine();
+
+            // Generate setter functions for store vars
+            foreach (var v in component.StoreVars)
+            {
+                var setterName = "set" + char.ToUpper(v.Name[0]) + v.Name.Substring(1);
+                sb.AppendLine($"  const {setterName} = (value: {v.TypeScriptType}) => {storeVarName}.setState((s) => ({{ ...s, {v.Name}: value }}));");
+            }
+            sb.AppendLine();
+        }
+
+        // Generate methods
+        foreach (var method in component.Methods)
+        {
+            var asyncPrefix = method.IsAsync ? "async " : "";
+            var methodBody = TransformMethodBody(method.Body, component);
+            sb.AppendLine($"  const {method.Name} = {asyncPrefix}() => {{");
+            sb.AppendLine($"    {methodBody}");
+            sb.AppendLine("  };");
+            sb.AppendLine();
+        }
+
         sb.AppendLine("  return (");
 
         // Transform template to JSX
-        var jsx = TransformToJsx(template);
+        var jsx = TransformToJsx(template, component);
 
         // Check if JSX needs fragment wrapper (starts with expression or has multiple roots)
         var trimmedJsx = jsx.Trim();
@@ -213,6 +391,53 @@ public class RazorToTsxCompiler
         sb.AppendLine("}");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Convert C# value to TypeScript value
+    /// </summary>
+    private string ConvertValueToTypeScript(string value, string csharpType)
+    {
+        if (value == "new()" || value == "new List<>()" || value.StartsWith("new List"))
+            return "[]";
+        if (value == "\"\"")
+            return "\"\"";
+        if (value == "null")
+            return "null";
+        if (value == "true" || value == "false")
+            return value;
+        if (int.TryParse(value, out _) || double.TryParse(value, out _))
+            return value;
+        return value;
+    }
+
+    /// <summary>
+    /// Transform C# method body to TypeScript
+    /// </summary>
+    private string TransformMethodBody(string body, ComponentInfo component)
+    {
+        var result = body;
+
+        // Transform store var mutations (e.g., count++ or count = value)
+        var storeVarName = char.ToLower(component.Name[0]) + component.Name.Substring(1) + "Store";
+
+        foreach (var v in component.StoreVars)
+        {
+            // count++
+            result = Regex.Replace(result, $@"\b{v.Name}\+\+", $"{storeVarName}.setState((s) => ({{ ...s, {v.Name}: s.{v.Name} + 1 }}))");
+
+            // count--
+            result = Regex.Replace(result, $@"\b{v.Name}--", $"{storeVarName}.setState((s) => ({{ ...s, {v.Name}: s.{v.Name} - 1 }}))");
+
+            // count = value
+            result = Regex.Replace(result, $@"\b{v.Name}\s*=\s*([^;]+);", m =>
+            {
+                var newValue = m.Groups[1].Value.Trim();
+                return $"{storeVarName}.setState((s) => ({{ ...s, {v.Name}: {newValue} }}));";
+            });
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -273,18 +498,31 @@ public class RazorToTsxCompiler
     /// <summary>
     /// Transform Razor template to JSX
     /// </summary>
-    private string TransformToJsx(string template)
+    private string TransformToJsx(string template, ComponentInfo? component = null)
     {
         var result = template;
 
-        // Transform @if blocks with proper brace matching
-        result = TransformIfBlocks(result);
-
-        // Transform @foreach blocks with proper brace matching
+        // Transform @foreach blocks with proper brace matching (must be BEFORE @if)
+        // This allows nested @if to be handled correctly without double-wrapping
         result = TransformForeachBlocks(result);
+
+        // Transform @if/else if/else blocks with proper brace matching
+        result = TransformIfElseBlocks(result);
+
+        // Transform explicit expressions @(...)
+        result = TransformExplicitExpressions(result);
+
+        // Transform @bind directives
+        result = TransformBindDirectives(result, component);
+
+        // Transform event handlers @onclick, @onchange, etc.
+        result = TransformEventHandlers(result, component);
 
         // Transform @Props.X to {X}
         result = Regex.Replace(result, @"@Props\.(\w+)", "{$1}");
+
+        // Transform @children to {children}
+        result = Regex.Replace(result, @"@children", "{children}");
 
         // Transform remaining @variable to {variable}
         result = Regex.Replace(result, @"@(\w+)", "{$1}");
@@ -305,9 +543,182 @@ public class RazorToTsxCompiler
     }
 
     /// <summary>
-    /// Transform @if blocks with proper brace matching
+    /// Transform event handlers (@onclick → onClick, etc.)
     /// </summary>
-    private string TransformIfBlocks(string template)
+    private string TransformEventHandlers(string template, ComponentInfo? component = null)
+    {
+        var result = template;
+
+        // Map of Razor event handlers to React
+        var eventMap = new Dictionary<string, string>
+        {
+            { "onclick", "onClick" },
+            { "onchange", "onChange" },
+            { "onsubmit", "onSubmit" },
+            { "oninput", "onInput" },
+            { "onkeydown", "onKeyDown" },
+            { "onkeyup", "onKeyUp" },
+            { "onkeypress", "onKeyPress" },
+            { "onmousedown", "onMouseDown" },
+            { "onmouseup", "onMouseUp" },
+            { "onmousemove", "onMouseMove" },
+            { "onmouseenter", "onMouseEnter" },
+            { "onmouseleave", "onMouseLeave" },
+            { "onfocus", "onFocus" },
+            { "onblur", "onBlur" },
+            { "ondblclick", "onDoubleClick" },
+            { "onscroll", "onScroll" },
+            { "onclose", "onClose" }
+        };
+
+        foreach (var (razorEvent, reactEvent) in eventMap)
+        {
+            // @onclick="handler" -> onClick={handler}
+            result = Regex.Replace(result, $@"@{razorEvent}=""([^""]+)""", match =>
+            {
+                var handler = match.Groups[1].Value;
+
+                // Transform inline store mutations if component has store vars
+                if (component != null)
+                {
+                    var storeVarName = char.ToLower(component.Name[0]) + component.Name.Substring(1) + "Store";
+                    foreach (var v in component.StoreVars)
+                    {
+                        // () => varName++ -> () => store.setState(...)
+                        handler = Regex.Replace(handler, $@"\(\)\s*=>\s*{v.Name}\+\+",
+                            $"() => {storeVarName}.setState((s) => ({{ ...s, {v.Name}: s.{v.Name} + 1 }}))");
+
+                        // () => varName-- -> () => store.setState(...)
+                        handler = Regex.Replace(handler, $@"\(\)\s*=>\s*{v.Name}--",
+                            $"() => {storeVarName}.setState((s) => ({{ ...s, {v.Name}: s.{v.Name} - 1 }}))");
+                    }
+                }
+
+                return $"{reactEvent}={{{handler}}}";
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Transform explicit expressions @(...)
+    /// </summary>
+    private string TransformExplicitExpressions(string template)
+    {
+        var result = template;
+
+        // Find @(...) patterns with proper parenthesis matching
+        var pattern = @"@\(";
+        int offset = 0;
+
+        while (true)
+        {
+            var match = Regex.Match(result.Substring(offset), pattern);
+            if (!match.Success) break;
+
+            var startIdx = offset + match.Index;
+            var parenStart = startIdx + 2; // After @(
+
+            // Find matching closing paren
+            int depth = 1;
+            int i = parenStart;
+            while (i < result.Length && depth > 0)
+            {
+                if (result[i] == '(') depth++;
+                if (result[i] == ')') depth--;
+                i++;
+            }
+
+            var content = result.Substring(parenStart, i - parenStart - 1);
+
+            // Transform Props.X to X
+            content = Regex.Replace(content, @"Props\.(\w+)", "$1");
+
+            // Transform C# string interpolation to JS template literal
+            if (content.StartsWith("$\""))
+            {
+                content = TransformStringInterpolation(content);
+            }
+
+            // Transform == to === for string comparisons
+            content = Regex.Replace(content, @"(\w+)\s*==\s*""", "$1 === \"");
+
+            var replacement = $"{{{content}}}";
+            result = result.Substring(0, startIdx) + replacement + result.Substring(i);
+
+            offset = startIdx + replacement.Length;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Transform C# string interpolation to JS template literal
+    /// </summary>
+    private string TransformStringInterpolation(string expr)
+    {
+        // $"Hello {name}!" -> `Hello ${name}!`
+        var content = expr.Substring(2, expr.Length - 3); // Remove $" and "
+        content = Regex.Replace(content, @"\{(\w+)\}", "${$1}");
+        return $"`{content}`";
+    }
+
+    /// <summary>
+    /// Transform @bind directives to value + onChange
+    /// </summary>
+    private string TransformBindDirectives(string template, ComponentInfo? component)
+    {
+        var result = template;
+
+        // @bind="varName" for input
+        result = Regex.Replace(result, @"<input([^>]*)\s+@bind=""(\w+)""([^>]*)/>", match =>
+        {
+            var before = match.Groups[1].Value;
+            var varName = match.Groups[2].Value;
+            var after = match.Groups[3].Value;
+            var fullAttrs = before + after;
+
+            // Check if it's a checkbox
+            if (fullAttrs.Contains("type=\"checkbox\"") || fullAttrs.Contains("type='checkbox'"))
+            {
+                var setterName = "set" + char.ToUpper(varName[0]) + varName.Substring(1);
+                return $"<input{before} checked={{{varName}}} onChange={{(e) => {setterName}(e.target.checked)}}{after}/>";
+            }
+            else
+            {
+                var setterName = "set" + char.ToUpper(varName[0]) + varName.Substring(1);
+                return $"<input{before} value={{{varName}}} onChange={{(e) => {setterName}(e.target.value)}}{after}/>";
+            }
+        });
+
+        // @bind for select
+        result = Regex.Replace(result, @"<select([^>]*)\s+@bind=""(\w+)""([^>]*)>", match =>
+        {
+            var before = match.Groups[1].Value;
+            var varName = match.Groups[2].Value;
+            var after = match.Groups[3].Value;
+            var setterName = "set" + char.ToUpper(varName[0]) + varName.Substring(1);
+            return $"<select{before} value={{{varName}}} onChange={{(e) => {setterName}(e.target.value)}}{after}>";
+        });
+
+        // @bind for textarea
+        result = Regex.Replace(result, @"<textarea([^>]*)\s+@bind=""(\w+)""([^>]*)>", match =>
+        {
+            var before = match.Groups[1].Value;
+            var varName = match.Groups[2].Value;
+            var after = match.Groups[3].Value;
+            var setterName = "set" + char.ToUpper(varName[0]) + varName.Substring(1);
+            return $"<textarea{before} value={{{varName}}} onChange={{(e) => {setterName}(e.target.value)}}{after}>";
+        });
+
+        return result;
+    }
+
+    /// <summary>
+    /// Transform @if/else if/else blocks with proper brace matching
+    /// </summary>
+    private string TransformIfElseBlocks(string template)
     {
         var result = template;
         var ifPattern = @"@if\s*\(([^)]+)\)\s*\{";
@@ -320,10 +731,13 @@ public class RazorToTsxCompiler
             var condition = match.Groups[1].Value.Trim()
                 .Replace("Props.", "");
 
+            // Transform == to === for string comparisons
+            condition = Regex.Replace(condition, @"(\w+)\s*==\s*""", "$1 === \"");
+
             var startIdx = match.Index;
             var braceStart = match.Index + match.Length - 1;
 
-            // Find matching closing brace
+            // Find matching closing brace for if block
             int depth = 1;
             int i = braceStart + 1;
             while (i < result.Length && depth > 0)
@@ -333,13 +747,108 @@ public class RazorToTsxCompiler
                 i++;
             }
 
-            var content = result.Substring(braceStart + 1, i - braceStart - 2).Trim();
-            var replacement = $"{{({condition}) && (\n{content}\n)}}";
+            var ifContent = result.Substring(braceStart + 1, i - braceStart - 2).Trim();
+            var endIdx = i;
 
-            result = result.Substring(0, startIdx) + replacement + result.Substring(i);
+            // Check for else if / else
+            var remaining = result.Substring(i).TrimStart();
+            var elseIfPattern = @"^else\s+if\s*\(([^)]+)\)\s*\{";
+            var elsePattern = @"^else\s*\{";
+
+            var elseIfConditions = new List<(string condition, string content)>();
+            string? elseContent = null;
+
+            while (true)
+            {
+                var elseIfMatch = Regex.Match(remaining, elseIfPattern);
+                var elseMatch = Regex.Match(remaining, elsePattern);
+
+                if (elseIfMatch.Success)
+                {
+                    var elseIfCond = elseIfMatch.Groups[1].Value.Trim().Replace("Props.", "");
+                    elseIfCond = Regex.Replace(elseIfCond, @"(\w+)\s*==\s*""", "$1 === \"");
+
+                    var elseIfBraceStart = elseIfMatch.Length - 1;
+                    depth = 1;
+                    int j = elseIfBraceStart + 1;
+                    while (j < remaining.Length && depth > 0)
+                    {
+                        if (remaining[j] == '{') depth++;
+                        if (remaining[j] == '}') depth--;
+                        j++;
+                    }
+
+                    var elseIfContent = remaining.Substring(elseIfBraceStart + 1, j - elseIfBraceStart - 2).Trim();
+                    elseIfConditions.Add((elseIfCond, elseIfContent));
+
+                    endIdx += (result.Substring(i).Length - result.Substring(i).TrimStart().Length) + j;
+                    remaining = remaining.Substring(j).TrimStart();
+                }
+                else if (elseMatch.Success)
+                {
+                    var elseBraceStart = elseMatch.Length - 1;
+                    depth = 1;
+                    int j = elseBraceStart + 1;
+                    while (j < remaining.Length && depth > 0)
+                    {
+                        if (remaining[j] == '{') depth++;
+                        if (remaining[j] == '}') depth--;
+                        j++;
+                    }
+
+                    elseContent = remaining.Substring(elseBraceStart + 1, j - elseBraceStart - 2).Trim();
+                    endIdx += (result.Substring(i).Length - result.Substring(i).TrimStart().Length) + j;
+                    break;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            // Generate JSX
+            string replacement;
+            if (elseIfConditions.Any() || elseContent != null)
+            {
+                // Use ternary expression: condition ? if : (elseIfCond ? elseIf : else)
+                var ternary = BuildTernary(condition, ifContent, elseIfConditions, elseContent);
+                replacement = $"{{{ternary}}}";
+            }
+            else
+            {
+                // Simple && pattern
+                replacement = $"{{({condition}) && (\n{ifContent}\n)}}";
+            }
+
+            result = result.Substring(0, startIdx) + replacement + result.Substring(endIdx);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Build nested ternary expression for if/else if/else
+    /// </summary>
+    private string BuildTernary(string condition, string ifContent, List<(string condition, string content)> elseIfs, string? elseContent)
+    {
+        var sb = new StringBuilder();
+        sb.Append($"({condition}) ? (\n{ifContent}\n)");
+
+        foreach (var (cond, content) in elseIfs)
+        {
+            sb.Append($" : ({cond}) ? (\n{content}\n)");
+        }
+
+        if (elseContent != null)
+        {
+            sb.Append($" : (\n{elseContent}\n)");
+        }
+        else
+        {
+            sb.Append(" : null");
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
@@ -375,9 +884,82 @@ public class RazorToTsxCompiler
             // Transform @item.X to {item.X}
             content = Regex.Replace(content, $@"@{itemVar}\.(\w+)", $"{{{itemVar}.$1}}");
 
+            // Transform nested @if inside foreach - use expression form without outer braces
+            content = TransformNestedIfInLoop(content, itemVar);
+
             var replacement = $"{{{collection}.map(({itemVar}, index) => (\n{content}\n))}}";
 
             result = result.Substring(0, startIdx) + replacement + result.Substring(i);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Transform nested @if blocks inside a loop (returns expression, not JSX)
+    /// </summary>
+    private string TransformNestedIfInLoop(string content, string itemVar)
+    {
+        var result = content;
+        var ifPattern = @"@if\s*\(([^)]+)\)\s*\{";
+
+        while (true)
+        {
+            var match = Regex.Match(result, ifPattern);
+            if (!match.Success) break;
+
+            var condition = match.Groups[1].Value.Trim();
+            // Replace item. references with item var
+            condition = condition.Replace($"{itemVar}.", $"{itemVar}.");
+
+            var startIdx = match.Index;
+            var braceStart = match.Index + match.Length - 1;
+
+            // Find matching closing brace
+            int depth = 1;
+            int idx = braceStart + 1;
+            while (idx < result.Length && depth > 0)
+            {
+                if (result[idx] == '{') depth++;
+                if (result[idx] == '}') depth--;
+                idx++;
+            }
+
+            var ifContent = result.Substring(braceStart + 1, idx - braceStart - 2).Trim();
+            var endIdx = idx;
+
+            // Check for else
+            var remaining = result.Substring(idx).TrimStart();
+            string? elseContent = null;
+
+            var elseMatch = Regex.Match(remaining, @"^else\s*\{");
+            if (elseMatch.Success)
+            {
+                var elseBraceStart = elseMatch.Length - 1;
+                depth = 1;
+                int j = elseBraceStart + 1;
+                while (j < remaining.Length && depth > 0)
+                {
+                    if (remaining[j] == '{') depth++;
+                    if (remaining[j] == '}') depth--;
+                    j++;
+                }
+                elseContent = remaining.Substring(elseBraceStart + 1, j - elseBraceStart - 2).Trim();
+                endIdx += (result.Substring(idx).Length - result.Substring(idx).TrimStart().Length) + j;
+            }
+
+            // Generate expression without outer braces (since we're already in a map callback)
+            string replacement;
+            if (elseContent != null)
+            {
+                replacement = $"({condition}) ? (\n{ifContent}\n) : (\n{elseContent}\n)";
+            }
+            else
+            {
+                replacement = $"({condition}) && (\n{ifContent}\n)";
+            }
+
+            result = result.Substring(0, startIdx) + replacement + result.Substring(endIdx);
         }
 
         return result;
@@ -518,6 +1100,9 @@ public class ComponentInfo
     public string FilePath { get; set; } = "";
     public ComponentDirective Directive { get; set; }
     public List<PropInfo> Props { get; set; } = new();
+    public List<StoreVarInfo> StoreVars { get; set; } = new();
+    public List<MethodInfo> Methods { get; set; } = new();
+    public List<ImportInfo> Imports { get; set; } = new();
 }
 
 public class PropInfo
@@ -536,4 +1121,27 @@ public class CompilationResult
     public string? GeneratedCode { get; set; }
     public string? Error { get; set; }
     public ComponentInfo? Component { get; set; }
+}
+
+public class StoreVarInfo
+{
+    public string Name { get; set; } = "";
+    public string CSharpType { get; set; } = "";
+    public string TypeScriptType { get; set; } = "";
+    public string DefaultValue { get; set; } = "";
+}
+
+public class MethodInfo
+{
+    public string Name { get; set; } = "";
+    public string Body { get; set; } = "";
+    public bool IsAsync { get; set; }
+}
+
+public class ImportInfo
+{
+    public string Path { get; set; } = "";
+    public string? Alias { get; set; }
+    public string[]? NamedImports { get; set; }
+    public bool IsDefault { get; set; }
 }

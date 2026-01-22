@@ -374,7 +374,8 @@ public class TestRunner : IDisposable
         RunTest("046 @code block removed", () => {
             var result = CompileRazor("<div>Hello</div>\n@code {\n    [Parameter] public string Name { get; set; }\n    private void DoSomething() { }\n}");
             AssertNotContains(result.GeneratedCode, "@code");
-            AssertNotContains(result.GeneratedCode, "DoSomething");
+            // Methods are now extracted and generated as const arrow functions
+            AssertContains(result.GeneratedCode, "DoSomething");
         });
 
         RunTest("047 @using directive removed", () => {
@@ -486,7 +487,8 @@ public class TestRunner : IDisposable
 
         RunTest("065 equality comparison", () => {
             var result = CompileRazor("@if (Props.Status == \"Active\")\n{\n    <span>Active</span>\n}\n@code {\n    [Parameter] public string Status { get; set; }\n}");
-            AssertContains(result.GeneratedCode, "Status == \"Active\"");
+            // C# == is transformed to JavaScript === for type-safe comparison
+            AssertContains(result.GeneratedCode, "Status === \"Active\"");
         });
 
         RunTest("066 not condition", () => {
